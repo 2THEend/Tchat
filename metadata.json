@@ -1,0 +1,6 @@
+{
+  "name": "Tchat",
+  "description": "Mobile-first social communication application centered around intentional, temporary, human interaction.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
