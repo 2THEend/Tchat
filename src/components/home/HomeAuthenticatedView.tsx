@@ -1,6 +1,14 @@
-import { User as UserIcon, LogOut, CheckCircle2, Shield, Calendar, Users, ArrowRight, UserPlus } from 'lucide-react';
-import { TchatProfile, TchatAccount } from '../../domains/identity/types';
+import React from 'react';
+import { 
+  Users, 
+  UserPlus, 
+  ArrowRight, 
+  Inbox, 
+  Sparkles,
+  MessageSquare
+} from 'lucide-react';
 import { User } from '@supabase/supabase-js';
+import { TchatProfile, TchatAccount } from '../../domains/identity/types';
 import { TchatConversation } from '../../domains/conversations/types';
 import { TodayConversationsList } from '../conversations/TodayConversationsList';
 
@@ -8,8 +16,8 @@ interface HomeAuthenticatedViewProps {
   user: User;
   profile: TchatProfile;
   account: TchatAccount | null;
-  onSignOut: () => void;
-  isSigningOut: boolean;
+  onSignOut?: () => void;
+  isSigningOut?: boolean;
   onOpenConnections?: () => void;
   incomingRequestsCount?: number;
   connectionsCount?: number;
@@ -19,11 +27,7 @@ interface HomeAuthenticatedViewProps {
 }
 
 export function HomeAuthenticatedView({
-  user,
   profile,
-  account,
-  onSignOut,
-  isSigningOut,
   onOpenConnections,
   incomingRequestsCount = 0,
   connectionsCount = 0,
@@ -31,61 +35,87 @@ export function HomeAuthenticatedView({
   isLoadingConversations = false,
   onSelectConversation,
 }: HomeAuthenticatedViewProps) {
-  const memberDate = profile.created_at
-    ? new Date(profile.created_at).toLocaleDateString(undefined, {
-        month: 'short',
-        year: 'numeric',
-      })
-    : 'Today';
+  // Format today's human-friendly date
+  const todayFormatted = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
 
   return (
-    <div id="home-authenticated-view" className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
-      {/* Top Welcome Bar */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <span className="text-[11px] font-semibold tracking-wider uppercase text-stone-400">
-            Tchat · Active Session
+    <div 
+      id="home-authenticated-view" 
+      className="flex-1 overflow-y-auto px-5 py-6 space-y-6"
+    >
+      {/* 1. Today Day Header */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold tracking-wider uppercase text-stone-400 font-mono">
+            {todayFormatted}
           </span>
-          <h1 className="text-xl font-semibold tracking-tight text-stone-100">
-            Welcome, {profile.display_name || profile.username}
-          </h1>
         </div>
-
-        <button
-          id="btn-signout"
-          type="button"
-          onClick={onSignOut}
-          disabled={isSigningOut}
-          title="Sign out of Tchat"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-rose-400 hover:border-rose-900/60 hover:bg-rose-950/20 text-xs font-medium transition-colors cursor-pointer"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>{isSigningOut ? 'Signing out...' : 'Sign out'}</span>
-        </button>
+        <h1 className="text-2xl font-semibold tracking-tight text-stone-100">
+          Today
+        </h1>
+        <p className="text-xs text-stone-400">
+          Social activity and active conversations for your day.
+        </p>
       </div>
 
-      {/* Contextual Connections Affordance */}
+      {/* 2. Contextual Notification: Incoming Connection Requests */}
+      {incomingRequestsCount > 0 && onOpenConnections && (
+        <div 
+          id="home-incoming-requests-alert"
+          role="alert"
+          onClick={onOpenConnections}
+          className="p-3.5 rounded-2xl bg-amber-950/30 border border-amber-800/50 flex items-center justify-between gap-3 cursor-pointer hover:bg-amber-950/40 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-900/60 border border-amber-700/60 flex items-center justify-center text-amber-300 shrink-0">
+              <Inbox className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-amber-200">
+                {incomingRequestsCount} new connection {incomingRequestsCount === 1 ? 'request' : 'requests'}
+              </p>
+              <p className="text-[11px] text-amber-300/70 truncate">
+                Someone shared context to connect with you
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 text-xs font-medium text-amber-200 shrink-0">
+            <span>Review</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+      )}
+
+      {/* 3. Today's Conversations (Primary Living Social Activity) */}
+      <TodayConversationsList
+        conversations={conversations}
+        isLoading={isLoadingConversations}
+        onSelectConversation={(conv) => onSelectConversation?.(conv)}
+        onOpenConnections={() => onOpenConnections?.()}
+      />
+
+      {/* 4. Contextual Connections & Discovery Bar */}
       {onOpenConnections && (
         <div 
-          id="home-connections-card"
-          className="p-4 rounded-3xl bg-gradient-to-b from-stone-900/90 to-stone-900/60 border border-stone-800/80 space-y-3 shadow-lg shadow-black/20"
+          id="home-connections-context-bar"
+          className="p-4 rounded-2xl bg-stone-900/50 border border-stone-800/70 space-y-3"
         >
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-200 shrink-0">
-                <Users className="w-5 h-5" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-300">
+                <Users className="w-4 h-4" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-stone-100">Connections</h3>
-                  {incomingRequestsCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-400 text-stone-950 font-bold text-[10px]">
-                      {incomingRequestsCount} new
-                    </span>
-                  )}
-                </div>
+                <h3 className="text-xs font-semibold text-stone-200">
+                  Your Connections
+                </h3>
                 <p className="text-[11px] text-stone-400">
-                  {connectionsCount} {connectionsCount === 1 ? 'connection' : 'connections'} · Intentional 1:1 human permissions
+                  {connectionsCount} {connectionsCount === 1 ? 'connection' : 'connections'}
                 </p>
               </div>
             </div>
@@ -94,22 +124,22 @@ export function HomeAuthenticatedView({
               id="btn-home-manage-connections"
               type="button"
               onClick={onOpenConnections}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-white text-stone-950 text-xs font-semibold transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors cursor-pointer"
             >
               <span>Manage</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3 h-3" />
             </button>
           </div>
 
-          <div className="pt-2 border-t border-stone-800/60 flex items-center justify-between text-[11px]">
+          <div className="pt-2 border-t border-stone-800/50 flex items-center justify-between text-[11px]">
             <span className="text-stone-400">
-              Connections are separate from conversations.
+              Connections are intentional 1:1 human permissions.
             </span>
             <button
               id="btn-home-find-people"
               type="button"
               onClick={onOpenConnections}
-              className="inline-flex items-center gap-1 text-stone-300 hover:text-white font-medium cursor-pointer"
+              className="inline-flex items-center gap-1 text-stone-300 hover:text-stone-100 font-medium transition-colors cursor-pointer"
             >
               <UserPlus className="w-3 h-3" />
               <span>Find People</span>
@@ -117,96 +147,6 @@ export function HomeAuthenticatedView({
           </div>
         </div>
       )}
-
-      {/* Today's Social Activity & Conversations */}
-      <TodayConversationsList
-        conversations={conversations}
-        isLoading={isLoadingConversations}
-        onSelectConversation={(conv) => onSelectConversation?.(conv)}
-        onOpenConnections={() => onOpenConnections?.()}
-      />
-
-      {/* Verified Profile Card */}
-      <div 
-        id="profile-identity-card"
-        className="p-5 rounded-3xl bg-stone-900/70 border border-stone-800/80 space-y-4"
-      >
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-300 overflow-hidden shrink-0">
-            {profile.avatar_url ? (
-              <img 
-                src={profile.avatar_url} 
-                alt={profile.display_name || profile.username} 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <UserIcon className="w-7 h-7 stroke-[1.6]" />
-            )}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-stone-100 truncate">
-                {profile.display_name || profile.username}
-              </h2>
-              <span className="inline-flex items-center text-emerald-400" title="Verified Identity">
-                <CheckCircle2 className="w-4 h-4 fill-emerald-950 stroke-emerald-400" />
-              </span>
-            </div>
-            <div className="text-xs text-stone-400 font-mono mt-0.5">
-              @{profile.username}
-            </div>
-          </div>
-        </div>
-
-        {profile.bio && (
-          <p className="text-xs text-stone-300 leading-relaxed pt-1 border-t border-stone-800/50">
-            {profile.bio}
-          </p>
-        )}
-
-        <div className="pt-2 border-t border-stone-800/50 grid grid-cols-2 gap-2 text-[11px] text-stone-400">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-stone-500" />
-            <span>Member since {memberDate}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-stone-500" />
-            <span className="capitalize">{account?.status || 'Active'} Account</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Account Authentication Specs */}
-      <div className="p-4 rounded-2xl bg-stone-900/40 border border-stone-800/60 space-y-2.5">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-          Authenticated Supabase Credentials
-        </h3>
-        <div className="space-y-1.5 text-xs text-stone-300">
-          <div className="flex items-center justify-between py-1 border-b border-stone-800/40">
-            <span className="text-stone-400">Auth User ID</span>
-            <span className="font-mono text-[11px] text-stone-300">{user.id.slice(0, 14)}...</span>
-          </div>
-          <div className="flex items-center justify-between py-1 border-b border-stone-800/40">
-            <span className="text-stone-400">Account Email</span>
-            <span className="text-[11px] text-stone-300 truncate max-w-[200px]">{user.email || 'None on record'}</span>
-          </div>
-          <div className="flex items-center justify-between py-1">
-            <span className="text-stone-400">Auth Provider</span>
-            <span className="text-[11px] text-stone-300 capitalize">{user.app_metadata?.provider || 'email'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Domain Readiness Notice */}
-      <div className="p-4 rounded-2xl bg-stone-900/20 border border-stone-800/40 space-y-1 text-center">
-        <span className="text-[10px] uppercase font-semibold tracking-wider text-stone-400">
-          Domain Roadmap
-        </span>
-        <p className="text-[11px] text-stone-400 leading-relaxed">
-          Authentication and verified Identity established. Social features (1:1 conversations, ephemeral media, intentional streaks) will be enabled in forthcoming domain milestones.
-        </p>
-      </div>
     </div>
   );
 }

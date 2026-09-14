@@ -13,12 +13,13 @@
 
 ## Current Stage
 
-**Frontend Deployment Preparation + PWA Foundation + Pre-Conversations Checkpoint.**
-- Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) are active.
-- Full Supabase backend schemas for Auth, Identity, Connections, and Blocks are applied and active on the remote Supabase instance.
-- Offline-safe, conservative PWA installability with valid Web App Manifest, PNG/SVG icons, and Service Worker caching is implemented and verified.
+**Conversations Domain + UI Organization & Coherence Pass Complete.**
+- Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) are active with clean mobile-first ergonomics (`max-w-md` shell).
+- Full Supabase backend schemas for Auth, Identity, Connections, and Blocks are applied on the remote Supabase instance.
+- Conversations domain implemented (PostgreSQL migration `20260913020000_create_tchat_conversations_and_messages.sql`, 1:1 messaging service, realtime subscriptions, delivery/read receipt handling, and local day activity filtering).
+- UI organization & coherence pass completed: standardized header structures, permanent navigation strictly for places (`Home`, `Feed`, `Profile`), contextual navigation for events (`Connections`, `Conversation`), and unified stone palette styling across all views.
+- Offline-safe, conservative PWA installability with valid Web App Manifest, PNG/SVG icons, and Service Worker caching is active.
 - Prepared for Vercel deployment with `vercel.json` SPA routing rewrites and cache controls.
-- Next major domain is **Conversations** (1:1 messaging architecture between confirmed connections).
 
 ---
 
@@ -62,6 +63,21 @@ These conceptual distinctions must **NEVER** be collapsed:
   - `blocks` table with bidirectional request and profile discovery prevention.
   - 9 PostgreSQL RPC business logic functions with caller identity verification (`auth.uid()`).
   - Client-side event bus (`onConnectionEvent`) synchronizing UI count badges.
+- **Conversations Domain**:
+  - Persistent 1:1 conversation model initiated strictly between confirmed connections.
+  - PostgreSQL migration `20260913020000_create_tchat_conversations_and_messages.sql` with RLS policies, unread tracking, and delivery receipts.
+  - Supabase Realtime channel subscriptions for live message ingestion and status synchronization.
+  - Strict product distinction: accepting a connection or opening a thread does not create Home activity; only meaningful interaction during the local day surfaces in Today's Conversations.
+  - Full optimistic message lifecycle with sending, sent, delivered, read, and retry on failure.
+  - Automatic graceful degradation with schema-pending indicator when migrations are awaiting execution.
+- **UI Organization & Coherence Pass**:
+  - Navigation architecture: "Permanent navigation is for places (`Home`, `Feed`, `Profile`). Contextual navigation is for things happening (`Connections`, `Conversation`)."
+  - `Home`: Standardized "Today" header with day/date hierarchy, unread badge indicators, connection alerts banner, and filtered Today's conversations list.
+  - `Connections`: Consistent contextual header with back navigation, unified horizontal tab pills, full empty/active states for Connections, Incoming requests, Find people (with mandatory context modal), Sent requests, and Blocked accounts.
+  - `Conversation`: Dedicated full-height 1:1 messaging space with partner header, auto-resizing composer, and delivery/read indicator status.
+  - `Profile`: Dedicated identity management screen displaying username handle, bio, account email, creation date, presence indicator, and sign-out action.
+  - `Feed`: Dedicated discovery screen reflecting the principle that public interaction does not imply connection.
+  - Visual Foundation: Calm, mobile-first, neutral dark aesthetic with warm stone palette, consistent typography, generous spacing, and Lucide icons throughout.
 - **PWA Foundation**:
   - Web App Manifest (`manifest.webmanifest`) with `standalone` display, `#121214` theme, `#0c0a09` background.
   - Standard PNG icons: `192x192`, `512x512`, `512x512` maskable (15% safe margin), `apple-touch-icon.png` (180x180), `favicon.png`.
@@ -174,15 +190,18 @@ The following actions require access to external dashboards (Vercel and Supabase
 
 ## Current Task
 
-**Frontend Deployment + PWA + Project State Checkpoint**
+**UI Organization & Coherence Pass (Complete)**
+- Harmonized the navigation hierarchy to keep permanent navigation strictly for places (`Home`, `Feed`, `Profile`) and contextual navigation for events (`Connections`, `Conversation`).
+- Refactored `HomeAuthenticatedView`, `ProfileView`, and `FeedView`.
+- Refined `ConnectionsView` and its sub-components (`ConnectionsList`, `IncomingRequestsList`, `FindPeople`, `RequestModal`, `SentRequestsList`, `BlockedUsersList`).
+- Refined `ConversationView` and `ConversationHeader`.
+- Verified clean build, linter, and unit tests.
 
 ---
 
 ## Next Task
 
-**Conversations Domain**:
-- 1:1 messaging architecture restricted strictly to confirmed connections.
-- PostgreSQL schema for conversations and messages.
-- Ephemeral default retention model.
-- Realtime subscription integration via Supabase Realtime.
-- Unread status tracking separated from Home activity.
+**Apply Conversations Migration & Review Next Domain**:
+- Apply `supabase/migrations/20260913020000_create_tchat_conversations_and_messages.sql` in Supabase SQL Editor.
+- Verify end-to-end realtime message delivery across two real user sessions.
+- Next product domain per roadmap (e.g., Streaks, Ephemeral Media, or Calls).

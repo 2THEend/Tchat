@@ -7,6 +7,8 @@ import { Navigation } from './Navigation';
 import { AuthEntry } from '../auth/AuthEntry';
 import { IdentitySetup } from '../identity/IdentitySetup';
 import { HomeAuthenticatedView } from '../home/HomeAuthenticatedView';
+import { ProfileView } from '../profile/ProfileView';
+import { FeedView } from '../places/FeedView';
 import { ConnectionsView } from '../connections/ConnectionsView';
 import { checkIdentity } from '../../domains/identity/identityService';
 import { signOut } from '../../domains/auth/authService';
@@ -568,15 +570,7 @@ export function AppShell() {
           ) : null}
 
           {!activeConversation && currentPlace === 'feed' && (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-stone-900 border border-stone-800/80 flex items-center justify-center mb-4 text-stone-400">
-                <span className="text-sm font-mono">feed</span>
-              </div>
-              <h2 className="text-base font-semibold text-stone-200 mb-1">Discovery Feed</h2>
-              <p className="text-xs text-stone-400 max-w-xs leading-relaxed">
-                Broader social discovery space. Scheduled for implementation following core identity and connection domains.
-              </p>
-            </div>
+            <FeedView />
           )}
 
           {!activeConversation && currentPlace === 'profile' && isViewingConnections ? (
@@ -586,18 +580,14 @@ export function AppShell() {
               onOpenConversation={handleOpenConversationFromConnection}
             />
           ) : !activeConversation && currentPlace === 'profile' ? (
-            <HomeAuthenticatedView
+            <ProfileView
               user={user}
               profile={profile}
               account={account}
+              connectionsCount={connectionsCount}
+              onOpenConnections={() => setIsViewingConnections(true)}
               onSignOut={handleSignOut}
               isSigningOut={isSigningOut}
-              onOpenConnections={() => setIsViewingConnections(true)}
-              incomingRequestsCount={incomingCount}
-              connectionsCount={connectionsCount}
-              conversations={conversations}
-              isLoadingConversations={isLoadingConversations}
-              onSelectConversation={(conv) => setActiveConversation(conv)}
             />
           ) : null}
         </section>
