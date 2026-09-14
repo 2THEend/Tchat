@@ -14,6 +14,10 @@ import { TchatProfile, TchatAccount } from '../../domains/identity/types';
 import { parseAuthUrlParams, formatAuthUrlError, clearAuthUrlParams } from '../../domains/auth/urlHandler';
 import { getIncomingRequests, getConnections } from '../../domains/connections/connectionsService';
 import { onConnectionEvent } from '../../domains/connections/events';
+import { ConversationView } from '../conversations/ConversationView';
+import { TchatConversation } from '../../domains/conversations/types';
+import { getUserConversations, getOrCreateConversation } from '../../domains/conversations/conversationsService';
+import { onConversationEvent } from '../../domains/conversations/events';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 import { OfflineIndicator } from '../pwa/OfflineIndicator';
 
@@ -23,6 +27,11 @@ export function AppShell() {
   const [isViewingConnections, setIsViewingConnections] = useState<boolean>(false);
   const [incomingCount, setIncomingCount] = useState<number>(0);
   const [connectionsCount, setConnectionsCount] = useState<number>(0);
+
+  // Conversations State
+  const [conversations, setConversations] = useState<TchatConversation[]>([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState<boolean>(false);
+  const [activeConversation, setActiveConversation] = useState<TchatConversation | null>(null);
 
   // Auth State
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
@@ -65,10 +74,63 @@ export function AppShell() {
     const unsub = onConnectionEvent(() => {
       if (user) {
         refreshConnectionCounts(user.id);
+        refreshConversations(user.id);
       }
     });
     return unsub;
   }, [user, refreshConnectionCounts]);
+
+  // Refresh Conversations
+  const refreshConversations = useCallback(async (userId: string) => {
+    setIsLoadingConversations(true);
+    try {
+      const res = await getUserConversations(userId);
+      if (res.data) {
+        setConversations(res.data);
+      }
+    } catch {
+      // Gracefully ignore if schema pending
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user && profile) {
+      refreshConversations(user.id);
+    }
+  }, [user, profile, refreshConversations]);
+
+  // Subscribe to conversation domain events
+  useEffect(() => {
+    const unsub = onConversationEvent(() => {
+      if (user) {
+        refreshConversations(user.id);
+      }
+    });
+    return unsub;
+  }, [user, refreshConversations]);
+
+  const handleOpenConversationFromConnection = async (targetUserId: string, partnerProfile?: any) => {
+    try {
+      const res = await getOrCreateConversation(targetUserId);
+      if (res.data) {
+        const conv = res.data;
+        if (partnerProfile && !conv.other_participant) {
+          conv.other_participant = {
+            id: partnerProfile.id,
+            username: partnerProfile.username,
+            display_name: partnerProfile.display_name,
+            avatar_url: partnerProfile.avatar_url,
+          };
+        }
+        setActiveConversation(conv);
+        setIsViewingConnections(false);
+      }
+    } catch (err) {
+      console.error('Failed to open conversation:', err);
+    }
+  };
 
   // Check identity against Supabase database
   const verifyUserIdentity = useCallback(async (userId: string) => {
@@ -456,28 +518,38 @@ export function AppShell() {
         id="app-shell-container"
         className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
       >
-        {/* Top Header */}
-        <header 
-          id="app-status-header"
-          className="w-full pt-3 px-6 pb-2 flex items-center justify-between text-stone-400 text-[11px] font-medium select-none z-10 border-b border-stone-900/50"
-        >
-          <span className="tracking-tight text-stone-300 font-semibold">Tchat</span>
-          <div className="flex items-center gap-2">
-            <PWAInstallButton variant="compact" />
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span className="text-[11px] font-mono text-stone-300">@{profile.username}</span>
-          </div>
-        </header>
+        {/* Top Header (hidden when inside active 1:1 conversation) */}
+        {!activeConversation && (
+          <header 
+            id="app-status-header"
+            className="w-full pt-3 px-6 pb-2 flex items-center justify-between text-stone-400 text-[11px] font-medium select-none z-10 border-b border-stone-900/50"
+          >
+            <span className="tracking-tight text-stone-300 font-semibold">Tchat</span>
+            <div className="flex items-center gap-2">
+              <PWAInstallButton variant="compact" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-[11px] font-mono text-stone-300">@{profile.username}</span>
+            </div>
+          </header>
+        )}
 
         {/* Place Content */}
         <section 
           id="app-main-content"
           className="flex-1 flex flex-col min-h-0 overflow-hidden relative"
         >
-          {currentPlace === 'home' && isViewingConnections ? (
+          {activeConversation && activeConversation.other_participant ? (
+            <ConversationView
+              conversationId={activeConversation.id}
+              currentUserId={user.id}
+              partner={activeConversation.other_participant}
+              onBack={() => setActiveConversation(null)}
+            />
+          ) : currentPlace === 'home' && isViewingConnections ? (
             <ConnectionsView
               currentUserId={user.id}
               onBackToHome={() => setIsViewingConnections(false)}
+              onOpenConversation={handleOpenConversationFromConnection}
             />
           ) : currentPlace === 'home' ? (
             <HomeAuthenticatedView
@@ -489,10 +561,13 @@ export function AppShell() {
               onOpenConnections={() => setIsViewingConnections(true)}
               incomingRequestsCount={incomingCount}
               connectionsCount={connectionsCount}
+              conversations={conversations}
+              isLoadingConversations={isLoadingConversations}
+              onSelectConversation={(conv) => setActiveConversation(conv)}
             />
           ) : null}
 
-          {currentPlace === 'feed' && (
+          {!activeConversation && currentPlace === 'feed' && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
               <div className="w-12 h-12 rounded-2xl bg-stone-900 border border-stone-800/80 flex items-center justify-center mb-4 text-stone-400">
                 <span className="text-sm font-mono">feed</span>
@@ -504,12 +579,13 @@ export function AppShell() {
             </div>
           )}
 
-          {currentPlace === 'profile' && isViewingConnections ? (
+          {!activeConversation && currentPlace === 'profile' && isViewingConnections ? (
             <ConnectionsView
               currentUserId={user.id}
               onBackToHome={() => setIsViewingConnections(false)}
+              onOpenConversation={handleOpenConversationFromConnection}
             />
-          ) : currentPlace === 'profile' ? (
+          ) : !activeConversation && currentPlace === 'profile' ? (
             <HomeAuthenticatedView
               user={user}
               profile={profile}
@@ -519,6 +595,9 @@ export function AppShell() {
               onOpenConnections={() => setIsViewingConnections(true)}
               incomingRequestsCount={incomingCount}
               connectionsCount={connectionsCount}
+              conversations={conversations}
+              isLoadingConversations={isLoadingConversations}
+              onSelectConversation={(conv) => setActiveConversation(conv)}
             />
           ) : null}
         </section>
@@ -527,6 +606,7 @@ export function AppShell() {
         <Navigation 
           currentPlace={currentPlace} 
           onSelectPlace={(place) => {
+            setActiveConversation(null);
             setIsViewingConnections(false);
             setCurrentPlace(place);
           }} 

@@ -41,12 +41,14 @@ interface ConnectionsViewProps {
   currentUserId: string;
   onBackToHome: () => void;
   initialTab?: ConnectionsActiveTab;
+  onOpenConversation?: (targetUserId: string, partnerProfile?: any) => void;
 }
 
 export function ConnectionsView({
   currentUserId,
   onBackToHome,
   initialTab = 'connections',
+  onOpenConversation,
 }: ConnectionsViewProps) {
   const [activeTab, setActiveTab] = useState<ConnectionsActiveTab>(initialTab);
   const [connections, setConnections] = useState<TchatConnection[]>([]);
@@ -360,6 +362,7 @@ export function ConnectionsView({
             onUnfriend={handleUnfriend}
             onBlock={handleBlock}
             isLoading={isLoading}
+            onOpenConversation={onOpenConversation}
           />
         )}
 

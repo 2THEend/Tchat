@@ -1,6 +1,8 @@
 import { User as UserIcon, LogOut, CheckCircle2, Shield, Calendar, Users, ArrowRight, UserPlus } from 'lucide-react';
 import { TchatProfile, TchatAccount } from '../../domains/identity/types';
 import { User } from '@supabase/supabase-js';
+import { TchatConversation } from '../../domains/conversations/types';
+import { TodayConversationsList } from '../conversations/TodayConversationsList';
 
 interface HomeAuthenticatedViewProps {
   user: User;
@@ -11,6 +13,9 @@ interface HomeAuthenticatedViewProps {
   onOpenConnections?: () => void;
   incomingRequestsCount?: number;
   connectionsCount?: number;
+  conversations?: TchatConversation[];
+  isLoadingConversations?: boolean;
+  onSelectConversation?: (conversation: TchatConversation) => void;
 }
 
 export function HomeAuthenticatedView({
@@ -22,6 +27,9 @@ export function HomeAuthenticatedView({
   onOpenConnections,
   incomingRequestsCount = 0,
   connectionsCount = 0,
+  conversations = [],
+  isLoadingConversations = false,
+  onSelectConversation,
 }: HomeAuthenticatedViewProps) {
   const memberDate = profile.created_at
     ? new Date(profile.created_at).toLocaleDateString(undefined, {
@@ -109,6 +117,14 @@ export function HomeAuthenticatedView({
           </div>
         </div>
       )}
+
+      {/* Today's Social Activity & Conversations */}
+      <TodayConversationsList
+        conversations={conversations}
+        isLoading={isLoadingConversations}
+        onSelectConversation={(conv) => onSelectConversation?.(conv)}
+        onOpenConnections={() => onOpenConnections?.()}
+      />
 
       {/* Verified Profile Card */}
       <div 

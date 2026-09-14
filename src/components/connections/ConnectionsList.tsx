@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, UserMinus, ShieldAlert, AlertCircle, Calendar } from 'lucide-react';
+import { User, UserMinus, ShieldAlert, AlertCircle, Calendar, MessageSquare } from 'lucide-react';
 import { TchatConnection } from '../../domains/connections/types';
 
 interface ConnectionsListProps {
@@ -7,6 +7,7 @@ interface ConnectionsListProps {
   onUnfriend: (targetUserId: string) => Promise<void>;
   onBlock: (targetUserId: string) => Promise<void>;
   isLoading: boolean;
+  onOpenConversation?: (targetUserId: string, partnerProfile?: any) => void;
 }
 
 export function ConnectionsList({
@@ -14,6 +15,7 @@ export function ConnectionsList({
   onUnfriend,
   onBlock,
   isLoading,
+  onOpenConversation,
 }: ConnectionsListProps) {
   const [confirmUnfriendId, setConfirmUnfriendId] = useState<string | null>(null);
   const [confirmBlockId, setConfirmBlockId] = useState<string | null>(null);
@@ -179,8 +181,21 @@ export function ConnectionsList({
                 </div>
               </div>
             ) : (
-              /* Standard Actions: Unfriend & Block */
+              /* Standard Actions: Message, Unfriend & Block */
               <div className="flex items-center justify-end gap-2 pt-1">
+                {onOpenConversation && (
+                  <button
+                    id={`btn-message-${otherId}`}
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onOpenConversation(otherId, other)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-white text-stone-950 text-xs font-semibold transition-colors cursor-pointer shadow-xs mr-auto"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Message</span>
+                  </button>
+                )}
+
                 <button
                   id={`btn-unfriend-${otherId}`}
                   type="button"
