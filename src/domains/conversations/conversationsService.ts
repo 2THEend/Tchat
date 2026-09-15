@@ -11,6 +11,8 @@ import {
 } from './types';
 import { validateTextMessageContent } from './validation';
 import { emitConversationEvent } from './events';
+import { getUserTimezone } from '../streaks/validation';
+import { emitStreakEvent } from '../streaks/events';
 
 function isPendingSchemaError(err: { code?: string; message?: string } | null | undefined): boolean {
   if (!err) return false;
@@ -280,7 +282,8 @@ export async function sendMessage(
   conversationId: string,
   content: string,
   messageType: 'text' | 'media' = 'text',
-  mediaAssetId?: string
+  mediaAssetId?: string,
+  clientTimezone?: string
 ): Promise<ConversationsServiceResult<TchatMessage>> {
   if (!supabase) {
     return { error: 'Supabase client is not initialized.' };
@@ -294,12 +297,15 @@ export async function sendMessage(
     content = validation.cleanContent;
   }
 
+  const timezone = clientTimezone || getUserTimezone();
+
   try {
     const { data, error } = await supabase.rpc('send_message', {
       p_conversation_id: conversationId,
       p_content: content,
       p_message_type: messageType,
       p_media_asset_id: mediaAssetId || null,
+      p_client_timezone: timezone,
     });
 
     if (error) {
@@ -351,6 +357,24 @@ export async function sendMessage(
       conversationId,
       lastActivityAt: message.created_at,
     });
+
+    if (data.streak_evaluation?.progress_created && data.streak_evaluation?.streak_id) {
+      emitStreakEvent({
+        type: 'streak:progressed',
+        streak: {
+          id: data.streak_evaluation.streak_id,
+          conversation_id: conversationId,
+          initiator_id: '',
+          recipient_id: '',
+          type: 'chat',
+          state: data.streak_evaluation.state || 'active',
+          progress_count: Number(data.streak_evaluation.new_progress_count || 0),
+          created_at: message.created_at,
+          state_changed_at: message.created_at,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return { data: message };
   } catch (err: any) {

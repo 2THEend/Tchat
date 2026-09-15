@@ -13,18 +13,15 @@
 
 ## Current Stage
 
-**Ephemeral Media Domain Implemented.**
+**Streaks Domain & Remote Database Schema Applied and Verified.**
 - Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) are active with clean mobile-first ergonomics (`max-w-md` shell).
-- Full Supabase backend schemas for Auth, Identity, Connections, and Blocks are applied on the remote Supabase instance.
-- Conversations domain implemented (PostgreSQL migration `20260913020000_create_tchat_conversations_and_messages.sql`, 1:1 messaging service, realtime subscriptions, delivery/read receipt handling, and local day activity filtering).
-- Ephemeral Media domain implemented on top of 1:1 Conversations:
-  - Private Supabase Storage bucket `conversation-media` with strict RLS storage policies.
-  - Authoritative 24-hour retention model (`expires_at = sent_at + interval '24 hours'`).
-  - Generic `MediaAsset` model supporting `image`, `video`, `audio`, and `file`.
-  - Ephemeral by default; recipients can save unexpired media to make it persistent (unless restricted by sender via `allow_recipient_save`).
-  - Realtime synchronization and event bus (`onMediaEvent`) for instant save reflections.
-  - PWA service worker and storage caches strictly forbid caching conversation media assets.
-  - PostgreSQL migration created: `20260914030000_create_tchat_media_assets.sql`.
+- Full Supabase backend schemas for Auth, Identity, Connections, Blocks, Conversations, Ephemeral Media, and Streaks are applied on the remote Supabase instance (`jqghykhnnrfsjkkjhekf`).
+- Ephemeral Media domain implemented with private bucket `conversation-media`.
+- Streaks domain and persistence foundation applied live via `scripts/migrate.mjs` using `SUPABASE_ACCESS_TOKEN`:
+  - Tables `streaks`, `streak_participant_days`, `streak_progress_days` active with RLS.
+  - All RPCs (`initiate_streak`, `accept_streak`, `decline_streak`, `cancel_streak`, `end_streak`, `get_conversation_streaks`, `get_streak_progress_history`, `evaluate_streak_dormancy`, `record_streak_qualifying_interaction`) active.
+  - Automatic migration runner `scripts/migrate.mjs` and npm script `npm run db:migrate` configured.
+- 11 unit test suites in `test/streaks.test.ts` passing (70 total tests across project).
 - UI organization & coherence pass completed: standardized header structures, permanent navigation strictly for places (`Home`, `Feed`, `Profile`), contextual navigation for events (`Connections`, `Conversation`), and unified stone palette styling across all views.
 - Offline-safe, conservative PWA installability with valid Web App Manifest, PNG/SVG icons, and Service Worker caching is active.
 - Prepared for Vercel deployment with `vercel.json` SPA routing rewrites and cache controls.
@@ -212,22 +209,20 @@ The following actions require access to external dashboards (Vercel and Supabase
 
 ## Current Task
 
-**Ephemeral Media Domain Implementation (Complete)**
-- Implemented `src/domains/media/` domain: types, validation, lifecycle logic, event bus, and `mediaService.ts`.
-- Integrated media into 1:1 Conversations: generic `MediaAsset` model (`image`, `video`, `audio`, `file`), authoritative 24-hour expiration (`expires_at = sent_at + interval '24 hours'`), sender-controlled save restrictions (`allow_recipient_save`), and recipient save action to persist media.
-- Built UI components: `MediaBubble` (compact expiration timer, short-lived signed URLs, save action, zoom/expand), `MediaAttachmentPreview` (upload progress, permission toggle), and `FirstUseMediaSaveTip`.
-- Configured private Supabase Storage `conversation-media` bucket security and signed URL fetching.
-- Service Worker navigation denylist and cache policies updated to forbid caching conversation media assets.
-- Created migration `supabase/migrations/20260914030000_create_tchat_media_assets.sql`.
-- Added 26 unit tests in `test/media.test.ts` (39 total across project), all passing.
-- Verified TypeScript compilation and linter cleanly.
+**Streaks Domain & Remote Database Migration (Complete)**
+- Configured automated migration runner `scripts/migrate.mjs` using `SUPABASE_ACCESS_TOKEN` via the Supabase Management API.
+- Executed and verified `supabase/migrations/20260915040000_create_tchat_streaks.sql` on remote Supabase instance `jqghykhnnrfsjkkjhekf` in 0.54s.
+- Created and verified remote tables: `streaks`, `streak_participant_days`, `streak_progress_days` (all RLS-secured).
+- Verified remote RPCs: `initiate_streak`, `accept_streak`, `decline_streak`, `cancel_streak`, `end_streak`, `get_conversation_streaks`, `get_streak_progress_history`, `evaluate_streak_dormancy`, `record_streak_qualifying_interaction`.
+- Added `npm run db:migrate` npm script for running migrations automatically.
+- Total 70 automated tests passing across 4 test suites with 0 lint errors and clean builds.
 
 ---
 
 ## Next Task
 
-**Apply Media Migration & Supabase Storage Verification**:
-- Apply `supabase/migrations/20260914030000_create_tchat_media_assets.sql` in the Supabase SQL Editor.
-- Ensure the `conversation-media` storage bucket exists in Supabase Storage with private visibility.
-- Verify two-client media exchange: upload, 24-hour expiration badge display, sender save toggle, recipient save action, and signed URL generation.
-- Next product domain per roadmap (e.g., Streaks, Calls, or Groups).
+**Streak UI Layer Implementation (Next Phase)**:
+- Build intentional, calm Streak indicators in 1:1 conversation headers.
+- Build Streak initiation modal/drawer with type selector (`chat`, `photo`, `video`).
+- Build pending streak invitation banner with Accept/Decline actions for recipients.
+- Visually communicate dormant state without punitive reset counters or noisy gamification.
