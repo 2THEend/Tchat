@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Database, RotateCcw, ShieldAlert, LogOut } from 'lucide-react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
@@ -13,17 +13,34 @@ import { ConnectionsView } from '../connections/ConnectionsView';
 import { checkIdentity } from '../../domains/identity/identityService';
 import { signOut } from '../../domains/auth/authService';
 import { TchatProfile, TchatAccount } from '../../domains/identity/types';
+import { 
+  getCachedIdentity, 
+  saveCachedIdentity, 
+  clearCachedIdentity 
+} from '../../domains/identity/identityCache';
 import { parseAuthUrlParams, formatAuthUrlError, clearAuthUrlParams } from '../../domains/auth/urlHandler';
 import { getIncomingRequests, getConnections } from '../../domains/connections/connectionsService';
 import { onConnectionEvent } from '../../domains/connections/events';
 import { ConversationView } from '../conversations/ConversationView';
 import { TchatConversation } from '../../domains/conversations/types';
-import { getUserConversations, getOrCreateConversation } from '../../domains/conversations/conversationsService';
+import { 
+  getUserConversations, 
+  getOrCreateConversation,
+  getConversationById 
+} from '../../domains/conversations/conversationsService';
+import { 
+  getStoredActiveConversationId, 
+  storeActiveConversationId, 
+  clearStoredActiveConversationId 
+} from '../../domains/conversations/conversationState';
 import { onConversationEvent } from '../../domains/conversations/events';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 import { OfflineIndicator } from '../pwa/OfflineIndicator';
 
 export function AppShell() {
+  // Cached snapshot for instant authenticated resume without blocking screens
+  const cachedIdentity = getCachedIdentity();
+
   // Navigation
   const [currentPlace, setCurrentPlace] = useState<NavigationPlace>('home');
   const [isViewingConnections, setIsViewingConnections] = useState<boolean>(false);
@@ -36,9 +53,15 @@ export function AppShell() {
   const [activeConversation, setActiveConversation] = useState<TchatConversation | null>(null);
 
   // Auth State
-  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  // If we already have a cached profile and account, we do not need to show the full-screen "Checking session..." loader
+  const [isInitializing, setIsInitializing] = useState<boolean>(() => !cachedIdentity?.profile);
   const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    if (cachedIdentity?.userId) {
+      return { id: cachedIdentity.userId, email: cachedIdentity.userEmail || null } as User;
+    }
+    return null;
+  });
   const [isSigningOut, setIsSigningOut] = useState<boolean>(false);
 
   // Recovery & URL Error State
@@ -47,9 +70,15 @@ export function AppShell() {
 
   // Identity State
   const [isCheckingIdentity, setIsCheckingIdentity] = useState<boolean>(false);
-  const [profile, setProfile] = useState<TchatProfile | null>(null);
-  const [account, setAccount] = useState<TchatAccount | null>(null);
+  const [profile, setProfile] = useState<TchatProfile | null>(() => cachedIdentity?.profile || null);
+  const [account, setAccount] = useState<TchatAccount | null>(() => cachedIdentity?.account || null);
   const [schemaPending, setSchemaPending] = useState<boolean>(false);
+
+  // Ref to track latest profile in async callbacks without triggering re-subscriptions
+  const profileRef = useRef<TchatProfile | null>(profile);
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
 
   // Refresh Connection Counts
   const refreshConnectionCounts = useCallback(async (userId: string) => {
@@ -113,6 +142,16 @@ export function AppShell() {
     return unsub;
   }, [user, refreshConversations]);
 
+  const handleOpenConversation = useCallback((conv: TchatConversation) => {
+    setActiveConversation(conv);
+    storeActiveConversationId(conv.id);
+  }, []);
+
+  const handleCloseConversation = useCallback(() => {
+    setActiveConversation(null);
+    clearStoredActiveConversationId();
+  }, []);
+
   const handleOpenConversationFromConnection = async (targetUserId: string, partnerProfile?: any) => {
     try {
       const res = await getOrCreateConversation(targetUserId);
@@ -126,7 +165,7 @@ export function AppShell() {
             avatar_url: partnerProfile.avatar_url,
           };
         }
-        setActiveConversation(conv);
+        handleOpenConversation(conv);
         setIsViewingConnections(false);
       }
     } catch (err) {
@@ -134,9 +173,15 @@ export function AppShell() {
     }
   };
 
-  // Check identity against Supabase database
-  const verifyUserIdentity = useCallback(async (userId: string) => {
-    setIsCheckingIdentity(true);
+  // Check identity against Supabase database.
+  // When isSilent=true (or when a profile is already in memory),
+  // verification proceeds as a quiet background validation without tearing down
+  // the active application tree or unmounting inputs.
+  const verifyUserIdentity = useCallback(async (userId: string, isSilent = false) => {
+    const shouldBlock = !isSilent && !profileRef.current;
+    if (shouldBlock) {
+      setIsCheckingIdentity(true);
+    }
     setSchemaPending(false);
     try {
       const res = await checkIdentity(userId);
@@ -144,14 +189,53 @@ export function AppShell() {
         setSchemaPending(true);
         setProfile(null);
         setAccount(null);
+        clearCachedIdentity();
       } else {
         setProfile(res.profile);
         setAccount(res.account);
+        if (res.profile && res.account) {
+          saveCachedIdentity(userId, res.profile, res.account, res.account.email);
+        } else {
+          clearCachedIdentity();
+        }
       }
     } finally {
-      setIsCheckingIdentity(false);
+      if (shouldBlock) {
+        setIsCheckingIdentity(false);
+      }
     }
   }, []);
+
+  // Process recreation & page reload restoration for active conversation
+  const hasAttemptedRestoreRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user || !profile || activeConversation) return;
+
+    const storedConvId = getStoredActiveConversationId();
+    if (!storedConvId || hasAttemptedRestoreRef.current === storedConvId) return;
+
+    hasAttemptedRestoreRef.current = storedConvId;
+
+    // 1. Try finding in current conversations list if already loaded
+    const found = conversations.find((c) => c.id === storedConvId);
+    if (found && found.other_participant) {
+      setActiveConversation(found);
+      return;
+    }
+
+    // 2. Fetch directly and verify authorization with Supabase RLS
+    getConversationById(storedConvId, user.id).then((res) => {
+      if (res.data && res.data.other_participant) {
+        setActiveConversation(res.data);
+      } else {
+        // Conversation not found or user is not an authorized participant
+        clearStoredActiveConversationId();
+      }
+    }).catch(() => {
+      clearStoredActiveConversationId();
+    });
+  }, [user, profile, activeConversation, conversations]);
 
   // Initialize Supabase Auth Session and URL handlers
   useEffect(() => {
@@ -186,7 +270,14 @@ export function AppShell() {
           setUser(data.session?.user || null);
 
           if (data.session?.user) {
-            await verifyUserIdentity(data.session.user.id);
+            // Verify in background if we already had a cached profile, otherwise blocking
+            const hasCachedProfile = Boolean(profileRef.current);
+            await verifyUserIdentity(data.session.user.id, hasCachedProfile);
+          } else {
+            // No active session: clear any cached identity
+            clearCachedIdentity();
+            setProfile(null);
+            setAccount(null);
           }
         }
       } catch (err) {
@@ -211,10 +302,19 @@ export function AppShell() {
         if (event === 'PASSWORD_RECOVERY') {
           setIsPasswordRecovery(true);
         } else if (event === 'SIGNED_IN' && newSession?.user) {
-          await verifyUserIdentity(newSession.user.id);
+          // If we already have a profile in memory, verify silently in background
+          // so that Android file-picker returns or tab focus events do not unmount UI!
+          const hasExistingProfile = Boolean(profileRef.current);
+          await verifyUserIdentity(newSession.user.id, hasExistingProfile);
+        } else if (event === 'TOKEN_REFRESHED' && newSession?.user) {
+          // Routine token refresh is strictly background
+          await verifyUserIdentity(newSession.user.id, true);
         } else if (event === 'SIGNED_OUT') {
+          clearCachedIdentity();
+          clearStoredActiveConversationId();
           setProfile(null);
           setAccount(null);
+          setActiveConversation(null);
           setIsPasswordRecovery(false);
           setCurrentPlace('home');
         }
@@ -232,10 +332,13 @@ export function AppShell() {
     setIsSigningOut(true);
     try {
       await signOut();
+      clearCachedIdentity();
+      clearStoredActiveConversationId();
       setSession(null);
       setUser(null);
       setProfile(null);
       setAccount(null);
+      setActiveConversation(null);
       setIsPasswordRecovery(false);
       setCurrentPlace('home');
     } finally {
@@ -246,6 +349,9 @@ export function AppShell() {
   // Called when identity setup completes successfully
   const handleIdentityComplete = (newProfile: TchatProfile) => {
     setProfile(newProfile);
+    if (user && account) {
+      saveCachedIdentity(user.id, newProfile, account, account.email);
+    }
     setCurrentPlace('home');
   };
 
@@ -339,8 +445,8 @@ export function AppShell() {
     );
   }
 
-  // 4. Authenticated but checking identity
-  if (isCheckingIdentity) {
+  // 4. Authenticated but checking identity (ONLY on cold start when no profile is available yet)
+  if (isCheckingIdentity && !profile) {
     return (
       <div 
         id="app-viewport-root"
@@ -545,7 +651,7 @@ export function AppShell() {
               conversationId={activeConversation.id}
               currentUserId={user.id}
               partner={activeConversation.other_participant}
-              onBack={() => setActiveConversation(null)}
+              onBack={handleCloseConversation}
             />
           ) : currentPlace === 'home' && isViewingConnections ? (
             <ConnectionsView
@@ -565,7 +671,7 @@ export function AppShell() {
               connectionsCount={connectionsCount}
               conversations={conversations}
               isLoadingConversations={isLoadingConversations}
-              onSelectConversation={(conv) => setActiveConversation(conv)}
+              onSelectConversation={handleOpenConversation}
             />
           ) : null}
 
@@ -596,7 +702,7 @@ export function AppShell() {
         <Navigation 
           currentPlace={currentPlace} 
           onSelectPlace={(place) => {
-            setActiveConversation(null);
+            handleCloseConversation();
             setIsViewingConnections(false);
             setCurrentPlace(place);
           }} 

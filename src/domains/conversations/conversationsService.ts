@@ -129,6 +129,83 @@ export async function getOrCreateConversation(
 }
 
 /**
+ * Retrieves a single 1:1 conversation by ID, strictly verifying that the
+ * current user is a participant. Used for process-recreation state restoration.
+ */
+export async function getConversationById(
+  conversationId: string,
+  currentUserId: string
+): Promise<ConversationsServiceResult<TchatConversation | null>> {
+  if (!supabase) {
+    return { error: 'Supabase client is not initialized.' };
+  }
+
+  if (!conversationId || !currentUserId) {
+    return { data: null, error: 'Invalid conversation or user identifier.' };
+  }
+
+  try {
+    const { data: convRow, error: convErr } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (convErr) {
+      if (isPendingSchemaError(convErr)) {
+        return { isSchemaPending: true, error: convErr.message };
+      }
+      return { error: convErr.message };
+    }
+
+    if (!convRow) {
+      return { data: null };
+    }
+
+    // Explicit authorization check: current user must be participant A or B
+    if (convRow.user_a_id !== currentUserId && convRow.user_b_id !== currentUserId) {
+      return { data: null, error: 'Unauthorized to access this conversation.' };
+    }
+
+    // Determine partner's ID
+    const otherId = convRow.user_a_id === currentUserId ? convRow.user_b_id : convRow.user_a_id;
+
+    // Fetch partner profile
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_url')
+      .eq('id', otherId)
+      .maybeSingle();
+
+    const conversation: TchatConversation = {
+      id: convRow.id,
+      connection_id: convRow.connection_id,
+      user_a_id: convRow.user_a_id,
+      user_b_id: convRow.user_b_id,
+      last_activity_at: convRow.last_activity_at,
+      last_activity_type: convRow.last_activity_type,
+      last_message_preview: convRow.last_message_preview,
+      last_sender_id: convRow.last_sender_id,
+      created_at: convRow.created_at,
+      updated_at: convRow.updated_at,
+      other_participant: profileRow ? {
+        id: profileRow.id,
+        username: profileRow.username,
+        display_name: profileRow.display_name,
+        avatar_url: profileRow.avatar_url,
+      } : undefined,
+    };
+
+    return { data: conversation };
+  } catch (err: any) {
+    if (isPendingSchemaError(err)) {
+      return { isSchemaPending: true, error: err?.message };
+    }
+    return { error: err?.message || 'Failed to retrieve conversation.' };
+  }
+}
+
+/**
  * Retrieves authoritative chronological messages for a conversation.
  */
 export async function getConversationMessages(

@@ -3,6 +3,11 @@ import { Send, AlertCircle, Paperclip } from 'lucide-react';
 import { MAX_MESSAGE_LENGTH, validateTextMessageContent } from '../../domains/conversations/validation';
 import { validateMediaFile } from '../../domains/media/validation';
 import { uploadMediaFile } from '../../domains/media/mediaService';
+import { 
+  getConversationDraft, 
+  storeConversationDraft, 
+  clearConversationDraft 
+} from '../../domains/conversations/conversationState';
 import { MediaAttachmentPreview } from './MediaAttachmentPreview';
 import { MediaCategory, TchatMediaAsset } from '../../domains/media/types';
 
@@ -19,8 +24,14 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   isSending,
   disabled = false,
 }) => {
-  const [text, setText] = useState('');
+  // Restore any unsent text draft for this conversation (string-only, never files)
+  const [text, setText] = useState<string>(() => getConversationDraft(conversationId));
   const [validationError, setValidationError] = useState<string | null>(null);
+  
+  // Update draft if conversationId changes
+  useEffect(() => {
+    setText(getConversationDraft(conversationId));
+  }, [conversationId]);
   
   // Media Attachment State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -148,6 +159,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
     // Clear composer inputs
     setText('');
+    clearConversationDraft(conversationId);
     handleRemoveAttachment();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -158,6 +170,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     } catch (err: any) {
       // Restore text if send completely failed before optimistic handling
       setText(contentToSend);
+      storeConversationDraft(conversationId, contentToSend);
       setValidationError(err?.message || 'Failed to send message');
     }
   };
@@ -227,7 +240,9 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             rows={1}
             value={text}
             onChange={(e) => {
-              setText(e.target.value);
+              const val = e.target.value;
+              setText(val);
+              storeConversationDraft(conversationId, val);
               if (validationError) setValidationError(null);
             }}
             onKeyDown={handleKeyDown}
