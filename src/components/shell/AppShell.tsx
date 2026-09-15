@@ -355,20 +355,17 @@ export function AppShell() {
     setCurrentPlace('home');
   };
 
-  // 1. Initializing state
-  if (isInitializing) {
+  // 1. Initializing state (Only block if we have NO cached profile and NO session resolved yet)
+  if (isInitializing && !profile) {
     return (
       <div 
         id="app-viewport-root"
         className="w-full h-full min-h-screen bg-stone-950 flex items-center justify-center p-4 selection:bg-stone-800"
       >
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="w-10 h-10 rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center">
-            <Loader2 className="w-5 h-5 animate-spin text-stone-300" />
+        <div className="flex flex-col items-center gap-3 text-center animate-pulse">
+          <div className="w-12 h-12 rounded-2xl bg-stone-900 border border-stone-800/80 flex items-center justify-center text-stone-200 font-bold text-lg tracking-tight shadow-xl shadow-black">
+            T
           </div>
-          <span className="text-xs font-medium tracking-tight text-stone-400">
-            Checking session...
-          </span>
         </div>
       </div>
     );
@@ -418,7 +415,7 @@ export function AppShell() {
       >
         <main
           id="app-shell-container"
-          className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
+          className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
         >
           <header 
             id="app-status-header"
@@ -452,9 +449,10 @@ export function AppShell() {
         id="app-viewport-root"
         className="w-full h-full min-h-screen bg-stone-950 flex items-center justify-center sm:p-4"
       >
-        <main className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md bg-stone-950 text-stone-100 flex flex-col items-center justify-center sm:rounded-[40px] sm:border sm:border-stone-800/70 p-6 text-center">
-          <Loader2 className="w-6 h-6 animate-spin text-stone-400 mb-3" />
-          <span className="text-xs text-stone-400 font-medium">Resolving Tchat identity...</span>
+        <main className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col items-center justify-center sm:rounded-[40px] sm:border sm:border-stone-800/70 p-6 text-center animate-pulse">
+          <div className="w-12 h-12 rounded-2xl bg-stone-900 border border-stone-800/80 flex items-center justify-center text-stone-200 font-bold text-lg tracking-tight shadow-xl shadow-black mb-3">
+            T
+          </div>
         </main>
       </div>
     );
@@ -624,7 +622,7 @@ export function AppShell() {
     >
       <main
         id="app-shell-container"
-        className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
+        className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
       >
         {/* Top Header (hidden when inside active 1:1 conversation) */}
         {!activeConversation && (
@@ -698,15 +696,17 @@ export function AppShell() {
           ) : null}
         </section>
 
-        {/* Permanent Places Navigation */}
-        <Navigation 
-          currentPlace={currentPlace} 
-          onSelectPlace={(place) => {
-            handleCloseConversation();
-            setIsViewingConnections(false);
-            setCurrentPlace(place);
-          }} 
-        />
+        {/* Permanent Places Navigation (hidden when inside active conversation) */}
+        {!activeConversation && (
+          <Navigation 
+            currentPlace={currentPlace} 
+            onSelectPlace={(place) => {
+              handleCloseConversation();
+              setIsViewingConnections(false);
+              setCurrentPlace(place);
+            }} 
+          />
+        )}
       </main>
       <OfflineIndicator />
     </div>
