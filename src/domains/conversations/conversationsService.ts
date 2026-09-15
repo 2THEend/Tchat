@@ -166,6 +166,23 @@ export async function getConversationMessages(
       delivered_at: row.delivered_at,
       read_at: row.read_at,
       created_at: row.created_at,
+      media: row.media ? {
+        id: row.media.id,
+        conversation_id: row.conversation_id,
+        uploader_id: row.media.uploader_id,
+        storage_path: row.media.storage_path,
+        media_type: row.media.media_type,
+        mime_type: row.media.mime_type,
+        file_size_bytes: row.media.file_size_bytes ? Number(row.media.file_size_bytes) : null,
+        original_filename: row.media.original_filename,
+        allow_recipient_save: row.media.allow_recipient_save !== false,
+        is_saved: Boolean(row.media.is_saved),
+        saved_at: row.media.saved_at,
+        saved_by_id: row.media.saved_by_id,
+        expires_at: row.media.expires_at,
+        created_at: row.media.created_at,
+        is_expired: Boolean(row.media.is_expired),
+      } : null,
     }));
 
     return { data: messages };
@@ -227,6 +244,23 @@ export async function sendMessage(
       delivered_at: data.delivered_at,
       read_at: data.read_at,
       created_at: data.created_at,
+      media: data.media ? {
+        id: data.media.id,
+        conversation_id: data.conversation_id,
+        uploader_id: data.media.uploader_id,
+        storage_path: data.media.storage_path,
+        media_type: data.media.media_type,
+        mime_type: data.media.mime_type,
+        file_size_bytes: data.media.file_size_bytes ? Number(data.media.file_size_bytes) : null,
+        original_filename: data.media.original_filename,
+        allow_recipient_save: data.media.allow_recipient_save !== false,
+        is_saved: Boolean(data.media.is_saved),
+        saved_at: data.media.saved_at,
+        saved_by_id: data.media.saved_by_id,
+        expires_at: data.media.expires_at,
+        created_at: data.media.created_at,
+        is_expired: Boolean(data.media.is_expired),
+      } : null,
     };
 
     emitConversationEvent({

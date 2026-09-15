@@ -13,10 +13,18 @@
 
 ## Current Stage
 
-**Conversations Domain + UI Organization & Coherence Pass Complete.**
+**Ephemeral Media Domain Implemented.**
 - Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) are active with clean mobile-first ergonomics (`max-w-md` shell).
 - Full Supabase backend schemas for Auth, Identity, Connections, and Blocks are applied on the remote Supabase instance.
 - Conversations domain implemented (PostgreSQL migration `20260913020000_create_tchat_conversations_and_messages.sql`, 1:1 messaging service, realtime subscriptions, delivery/read receipt handling, and local day activity filtering).
+- Ephemeral Media domain implemented on top of 1:1 Conversations:
+  - Private Supabase Storage bucket `conversation-media` with strict RLS storage policies.
+  - Authoritative 24-hour retention model (`expires_at = sent_at + interval '24 hours'`).
+  - Generic `MediaAsset` model supporting `image`, `video`, `audio`, and `file`.
+  - Ephemeral by default; recipients can save unexpired media to make it persistent (unless restricted by sender via `allow_recipient_save`).
+  - Realtime synchronization and event bus (`onMediaEvent`) for instant save reflections.
+  - PWA service worker and storage caches strictly forbid caching conversation media assets.
+  - PostgreSQL migration created: `20260914030000_create_tchat_media_assets.sql`.
 - UI organization & coherence pass completed: standardized header structures, permanent navigation strictly for places (`Home`, `Feed`, `Profile`), contextual navigation for events (`Connections`, `Conversation`), and unified stone palette styling across all views.
 - Offline-safe, conservative PWA installability with valid Web App Manifest, PNG/SVG icons, and Service Worker caching is active.
 - Prepared for Vercel deployment with `vercel.json` SPA routing rewrites and cache controls.
@@ -70,6 +78,18 @@ These conceptual distinctions must **NEVER** be collapsed:
   - Strict product distinction: accepting a connection or opening a thread does not create Home activity; only meaningful interaction during the local day surfaces in Today's Conversations.
   - Full optimistic message lifecycle with sending, sent, delivered, read, and retry on failure.
   - Automatic graceful degradation with schema-pending indicator when migrations are awaiting execution.
+- **Ephemeral Media Domain**:
+  - Generic `MediaAsset` model supporting `image`, `video`, `audio`, and `file`.
+  - Authoritative 24-hour expiration model: `expires_at = sent_at + interval '24 hours'`.
+  - Ephemeral by default; viewing does not reset or pause the 24-hour timer.
+  - Recipient save action: converts ephemeral asset into a persistent attachment (`is_saved = true`), stopping expiration.
+  - Sender-controlled save restriction: senders can disable recipient saving per asset (`allow_recipient_save = false`).
+  - Private Supabase Storage bucket `conversation-media` (50MB max limit).
+  - Storage RLS security: storage access strictly requires conversation membership AND (`is_saved = true OR expires_at > now()`). Expired media cannot be fetched or resolved.
+  - Realtime event bus (`onMediaEvent`) dispatches `media:created` and `media:saved` events.
+  - Lightweight one-time educational tip (`FirstUseMediaSaveTip`) explaining the 24-hour retention and save action.
+  - PWA Service Worker caching policy updated to strictly forbid caching conversation media and Supabase storage responses.
+  - PostgreSQL migration created: `supabase/migrations/20260914030000_create_tchat_media_assets.sql`.
 - **UI Organization & Coherence Pass**:
   - Navigation architecture: "Permanent navigation is for places (`Home`, `Feed`, `Profile`). Contextual navigation is for things happening (`Connections`, `Conversation`)."
   - `Home`: Standardized "Today" header with day/date hierarchy, unread badge indicators, connection alerts banner, and filtered Today's conversations list.
@@ -97,15 +117,17 @@ These conceptual distinctions must **NEVER** be collapsed:
 - **TypeScript**: `tsc --noEmit` passed with 0 errors.
 - **Linter**: `npm run lint` passed cleanly.
 - **Production Build**: `npm run build` generates clean `dist/` bundle including Service Worker (`sw.js`), Workbox runtime, and manifest.
-- **Unit & Domain Tests**: `npm test` runs 13 passing automated unit tests for the Connections domain:
-  - Context reason length enforcement (min 3 chars, max 300 chars, whitespace trimming, null handling).
-  - Canonical pair ordering invariant `LEAST(a, b) < GREATEST(a, b)`.
-  - Connection event bus listener dispatch and unsubscription lifecycle.
+- **Unit & Domain Tests**: `npm test` runs 39 passing automated unit tests (13 Connections + 26 Ephemeral Media):
+  - Connections: context reason length enforcement (3–300 chars, trimming, null handling), canonical pair ordering `LEAST(a, b) < GREATEST(a, b)`, event bus lifecycle.
+  - Ephemeral Media: filename sanitization, 0-byte rejection, category-specific file size limits (20MB photos, 25MB audio, 50MB video/docs), MIME whitelist, authoritative 24-hour expiration calculation, active vs. expired detection, saved asset lifetime preservation, recipient-only save authorization, and time remaining formatters.
 
 ### Database Verification
 - Applied migrations on remote Supabase:
   - `20260913000000_create_tchat_accounts_and_profiles.sql`
   - `20260913010000_create_tchat_connections_and_blocks.sql`
+- Pending migrations for Supabase SQL Editor:
+  - `20260913020000_create_tchat_conversations_and_messages.sql` (Conversations)
+  - `20260914030000_create_tchat_media_assets.sql` (Ephemeral Media & Storage RLS)
 - Remote schema inspection confirmed all 9 RPC functions active in schema cache:
   `search_profiles`, `send_connection_request`, `accept_connection_request`, `decline_connection_request`, `ignore_connection_request`, `cancel_connection_request`, `unfriend_user`, `block_user`, `unblock_user`.
 - Constraints confirmed active: canonical connection ordering, non-empty context, self-request block, bidirectional unique block index.
@@ -190,18 +212,22 @@ The following actions require access to external dashboards (Vercel and Supabase
 
 ## Current Task
 
-**UI Organization & Coherence Pass (Complete)**
-- Harmonized the navigation hierarchy to keep permanent navigation strictly for places (`Home`, `Feed`, `Profile`) and contextual navigation for events (`Connections`, `Conversation`).
-- Refactored `HomeAuthenticatedView`, `ProfileView`, and `FeedView`.
-- Refined `ConnectionsView` and its sub-components (`ConnectionsList`, `IncomingRequestsList`, `FindPeople`, `RequestModal`, `SentRequestsList`, `BlockedUsersList`).
-- Refined `ConversationView` and `ConversationHeader`.
-- Verified clean build, linter, and unit tests.
+**Ephemeral Media Domain Implementation (Complete)**
+- Implemented `src/domains/media/` domain: types, validation, lifecycle logic, event bus, and `mediaService.ts`.
+- Integrated media into 1:1 Conversations: generic `MediaAsset` model (`image`, `video`, `audio`, `file`), authoritative 24-hour expiration (`expires_at = sent_at + interval '24 hours'`), sender-controlled save restrictions (`allow_recipient_save`), and recipient save action to persist media.
+- Built UI components: `MediaBubble` (compact expiration timer, short-lived signed URLs, save action, zoom/expand), `MediaAttachmentPreview` (upload progress, permission toggle), and `FirstUseMediaSaveTip`.
+- Configured private Supabase Storage `conversation-media` bucket security and signed URL fetching.
+- Service Worker navigation denylist and cache policies updated to forbid caching conversation media assets.
+- Created migration `supabase/migrations/20260914030000_create_tchat_media_assets.sql`.
+- Added 26 unit tests in `test/media.test.ts` (39 total across project), all passing.
+- Verified TypeScript compilation and linter cleanly.
 
 ---
 
 ## Next Task
 
-**Apply Conversations Migration & Review Next Domain**:
-- Apply `supabase/migrations/20260913020000_create_tchat_conversations_and_messages.sql` in Supabase SQL Editor.
-- Verify end-to-end realtime message delivery across two real user sessions.
-- Next product domain per roadmap (e.g., Streaks, Ephemeral Media, or Calls).
+**Apply Media Migration & Supabase Storage Verification**:
+- Apply `supabase/migrations/20260914030000_create_tchat_media_assets.sql` in the Supabase SQL Editor.
+- Ensure the `conversation-media` storage bucket exists in Supabase Storage with private visibility.
+- Verify two-client media exchange: upload, 24-hour expiration badge display, sender save toggle, recipient save action, and signed URL generation.
+- Next product domain per roadmap (e.g., Streaks, Calls, or Groups).

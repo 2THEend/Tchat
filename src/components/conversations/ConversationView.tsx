@@ -4,15 +4,18 @@ import {
   TchatMessage, 
   TchatParticipantProfile 
 } from '../../domains/conversations/types';
+import { TchatMediaAsset } from '../../domains/media/types';
 import { 
   getConversationMessages, 
   sendMessage as apiSendMessage, 
   markConversationRead 
 } from '../../domains/conversations/conversationsService';
 import { subscribeToConversation } from '../../domains/conversations/realtime';
+import { onMediaEvent } from '../../domains/media/events';
 import { ConversationHeader } from './ConversationHeader';
 import { MessageList } from './MessageList';
 import { MessageComposer } from './MessageComposer';
+import { FirstUseMediaSaveTip } from './FirstUseMediaSaveTip';
 
 interface ConversationViewProps {
   conversationId: string;
@@ -121,24 +124,54 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       },
     });
 
+    // Realtime Media Event synchronization (e.g. recipient saves media)
+    const unsubscribeMedia = onMediaEvent((event) => {
+      if (event.conversationId === conversationId && event.type === 'media:saved' && event.asset) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.media_asset_id === event.mediaAssetId || msg.media?.id === event.mediaAssetId) {
+              return {
+                ...msg,
+                media: {
+                  ...(msg.media || event.asset!),
+                  is_saved: true,
+                  is_expired: false,
+                  saved_at: event.timestamp,
+                  saved_by_id: event.savedByUserId || msg.media?.saved_by_id,
+                },
+              };
+            }
+            return msg;
+          })
+        );
+      }
+    });
+
     return () => {
       unsubscribe();
+      unsubscribeMedia();
     };
   }, [conversationId, currentUserId, loadMessages]);
 
   // Handle message sending with optimistic UI updates
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (
+    content: string, 
+    mediaAssetId?: string, 
+    mediaAsset?: TchatMediaAsset
+  ) => {
     setIsSending(true);
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const messageType = mediaAssetId ? 'media' : 'text';
 
     const optimisticMessage: TchatMessage = {
       id: tempId,
       client_temp_id: tempId,
       conversation_id: conversationId,
       sender_id: currentUserId,
-      message_type: 'text',
-      content,
-      media_asset_id: null,
+      message_type: messageType,
+      content: content || null,
+      media_asset_id: mediaAssetId || null,
+      media: mediaAsset || null,
       sequence_number: Date.now(),
       status: 'sending',
       delivered_at: null,
@@ -149,7 +182,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     setMessages((prev) => [...prev, optimisticMessage]);
 
     try {
-      const res = await apiSendMessage(conversationId, content, 'text');
+      const res = await apiSendMessage(conversationId, content, messageType, mediaAssetId);
 
       if (res.isSchemaPending) {
         setIsSchemaPending(true);
@@ -175,7 +208,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         const confirmedMsg = res.data;
         setMessages((prev) =>
           prev.map((m) =>
-            m.client_temp_id === tempId ? { ...confirmedMsg, client_temp_id: tempId } : m
+            m.client_temp_id === tempId 
+              ? { ...confirmedMsg, client_temp_id: tempId, media: confirmedMsg.media || mediaAsset } 
+              : m
           )
         );
       }
@@ -192,6 +227,17 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         setIsSending(false);
       }
     }
+  };
+
+  const handleMediaSaved = (updatedAsset: TchatMediaAsset) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.media_asset_id === updatedAsset.id || msg.media?.id === updatedAsset.id) {
+          return { ...msg, media: updatedAsset };
+        }
+        return msg;
+      })
+    );
   };
 
   // Retry sending a failed message
@@ -224,9 +270,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         <div className="p-3 bg-amber-950/50 border-b border-amber-900/60 text-amber-200 text-xs flex items-center gap-2">
           <Database className="w-4 h-4 text-amber-400 shrink-0" />
           <div className="flex-1 min-w-0">
-            <span className="font-semibold">Conversations Schema Pending:</span> Please apply migration{' '}
+            <span className="font-semibold">Media Schema Pending:</span> Please apply migration{' '}
             <code className="bg-amber-900/40 px-1 py-0.5 rounded font-mono text-[11px]">
-              20260913020000_create_tchat_conversations_and_messages.sql
+              20260914030000_create_tchat_media_assets.sql
             </code>{' '}
             in Supabase SQL Editor.
           </div>
@@ -241,6 +287,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         </div>
       )}
 
+      {/* Ephemeral Media Save Tip */}
+      <FirstUseMediaSaveTip />
+
       {/* Message Area */}
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
@@ -251,12 +300,15 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           messages={messages}
           currentUserId={currentUserId}
           partner={partner}
+          conversationId={conversationId}
           onRetryMessage={handleRetryMessage}
+          onMediaSaved={handleMediaSaved}
         />
       )}
 
       {/* Message Composer */}
       <MessageComposer
+        conversationId={conversationId}
         onSend={handleSendMessage}
         isSending={isSending}
         disabled={isSchemaPending}

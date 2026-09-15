@@ -8,12 +8,16 @@ import {
   RotateCcw 
 } from 'lucide-react';
 import { TchatMessage, TchatParticipantProfile } from '../../domains/conversations/types';
+import { TchatMediaAsset } from '../../domains/media/types';
+import { MediaBubble } from './MediaBubble';
 
 interface MessageListProps {
   messages: TchatMessage[];
   currentUserId: string;
   partner: TchatParticipantProfile;
+  conversationId: string;
   onRetryMessage?: (tempId: string, content: string) => void;
+  onMediaSaved?: (updatedAsset: TchatMediaAsset) => void;
 }
 
 function formatMessageTime(dateString: string): string {
@@ -29,7 +33,9 @@ export const MessageList: React.FC<MessageListProps> = ({
   messages,
   currentUserId,
   partner,
+  conversationId,
   onRetryMessage,
+  onMediaSaved,
 }) => {
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,9 +75,8 @@ export const MessageList: React.FC<MessageListProps> = ({
         const isMine = msg.sender_id === currentUserId;
         const formattedTime = formatMessageTime(msg.created_at);
         const isFailed = msg.status === 'failed';
-        const isLastInSequence =
-          index === messages.length - 1 ||
-          messages[index + 1].sender_id !== msg.sender_id;
+        const hasMedia = Boolean(msg.media || msg.media_asset_id);
+        const hasText = Boolean(msg.content && msg.content.trim().length > 0);
 
         return (
           <div
@@ -79,16 +84,58 @@ export const MessageList: React.FC<MessageListProps> = ({
             id={`message-item-${msg.client_temp_id || msg.id}`}
             className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
           >
-            <div
-              className={`max-w-[82%] sm:max-w-[72%] px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed break-words ${
-                isMine
-                  ? isFailed
-                    ? 'bg-rose-950/40 text-stone-200 border border-rose-900/60 rounded-br-sm'
-                    : 'bg-stone-800 text-stone-100 border border-stone-700/60 rounded-br-sm'
-                  : 'bg-stone-900/90 text-stone-200 border border-stone-800/80 rounded-bl-sm'
-              }`}
-            >
-              {msg.content}
+            <div className={`max-w-[85%] sm:max-w-[72%] ${isMine ? 'items-end' : 'items-start'}`}>
+              {/* Ephemeral Media Attachment Bubble */}
+              {hasMedia && (
+                <div className="mb-1">
+                  {msg.media ? (
+                    <MediaBubble
+                      media={msg.media}
+                      currentUserId={currentUserId}
+                      conversationId={conversationId}
+                      isMine={isMine}
+                      onMediaSaved={onMediaSaved}
+                    />
+                  ) : (
+                    <MediaBubble
+                      media={{
+                        id: msg.media_asset_id!,
+                        conversation_id: conversationId,
+                        uploader_id: msg.sender_id,
+                        storage_path: null,
+                        media_type: 'image',
+                        mime_type: null,
+                        file_size_bytes: null,
+                        original_filename: 'Attachment',
+                        allow_recipient_save: true,
+                        is_saved: false,
+                        expires_at: msg.created_at,
+                        created_at: msg.created_at,
+                        is_expired: false,
+                      }}
+                      currentUserId={currentUserId}
+                      conversationId={conversationId}
+                      isMine={isMine}
+                      onMediaSaved={onMediaSaved}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Text / Caption Content */}
+              {hasText && (
+                <div
+                  className={`px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed break-words ${
+                    isMine
+                      ? isFailed
+                        ? 'bg-rose-950/40 text-stone-200 border border-rose-900/60 rounded-br-sm'
+                        : 'bg-stone-800 text-stone-100 border border-stone-700/60 rounded-br-sm'
+                      : 'bg-stone-900/90 text-stone-200 border border-stone-800/80 rounded-bl-sm'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              )}
             </div>
 
             {/* Message Metadata / Status */}
@@ -147,7 +194,6 @@ export const MessageList: React.FC<MessageListProps> = ({
           </div>
         );
       })}
-
       <div ref={scrollEndRef} />
     </div>
   );

@@ -1,3 +1,6 @@
+import { TchatMediaAsset } from '../media/types';
+export type { TchatMediaAsset };
+
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 export type MessageType = 'text' | 'media';
 export type ActivityType = 'text' | 'media' | 'call';
@@ -40,18 +43,8 @@ export interface TchatMessage {
   // Optimistic tracking properties
   client_temp_id?: string;
   error?: string;
-}
-
-export interface TchatMediaAsset {
-  id: string;
-  uploader_id: string;
-  storage_path: string;
-  media_type: 'image' | 'video' | 'audio';
-  mime_type: string | null;
-  file_size_bytes: number | null;
-  is_ephemeral: boolean;
-  expires_at: string | null;
-  created_at: string;
+  // Attached Ephemeral Media Details
+  media?: TchatMediaAsset | null;
 }
 
 export interface ConversationsServiceResult<T> {
