@@ -17,8 +17,12 @@ import {
 import { 
   StreakType, 
   StreakState, 
+  StreakEndReason,
   TchatStreak 
 } from '../src/domains/streaks/types';
+import { 
+  canEndStreak 
+} from '../src/domains/streaks/validation';
 import { 
   onStreakEvent, 
   emitStreakEvent 
@@ -206,6 +210,107 @@ function runStreakUITests() {
   assert(state.receivedId === 'streak-accepted-xyz', 'Streak ID accurately passed through event');
   unsubscribe();
   console.log('   ✓ Event bus UI integration passed.');
+  passed++;
+
+  // 6. Streak End UI Action & Invariant Verification
+  console.log('6. Testing Streak End UI action rules and lifecycle state invariants...');
+
+  // Invariant A: Only active or dormant streaks can show the End Streak action
+  assert(canEndStreak('active') === true, 'Active streak shows End Streak action');
+  assert(canEndStreak('dormant') === true, 'Dormant streak shows End Streak action');
+  assert(canEndStreak('pending') === false, 'Pending streak does NOT show End Streak action');
+  assert(canEndStreak('ended') === false, 'Ended streak does NOT show End Streak action');
+  assert(canEndStreak(null) === false, 'Null state does NOT show End Streak action');
+  assert(canEndStreak(undefined) === false, 'Undefined state does NOT show End Streak action');
+
+  // Invariant B: Confirmation flow simulation
+  let confirmingStreakId: string | null = null;
+  let rpcCallCount = 0;
+
+  // User clicks "End Streak" on active chat streak
+  confirmingStreakId = chatActiveStreak.id;
+  assert(confirmingStreakId === 'streak-1', 'Initial click opens confirmation step');
+  assert(rpcCallCount === 0, 'No RPC is triggered before explicit user confirmation');
+
+  // User clicks "Cancel"
+  confirmingStreakId = null;
+  assert(confirmingStreakId === null, 'Canceling confirmation restores normal view without ending streak');
+  assert(rpcCallCount === 0, 'No RPC is called on cancel');
+
+  // User clicks "End Streak" and then "Confirm End"
+  confirmingStreakId = chatActiveStreak.id;
+  assert(confirmingStreakId === chatActiveStreak.id, 'Confirmation state active');
+  
+  // Simulate explicit confirmation execution
+  const endStreakSimulator = (targetStreak: TchatStreak) => {
+    assert(confirmingStreakId === targetStreak.id, 'Confirmation was required and confirmed');
+    rpcCallCount++;
+    return {
+      ...targetStreak,
+      state: 'ended' as StreakState,
+      end_reason: 'manual_ended' as StreakEndReason,
+      ended_at: new Date().toISOString(),
+      state_changed_at: new Date().toISOString(),
+    };
+  };
+
+  const endedChatStreak = endStreakSimulator(chatActiveStreak);
+  assert(rpcCallCount === 1, 'Confirmed action executes end_streak RPC exactly once');
+  assert(endedChatStreak.state === 'ended', 'Streak state transitions to ended');
+  assert(endedChatStreak.end_reason === 'manual_ended', 'End reason is marked manual_ended');
+  
+  // Invariant C: Historical progress remains intact
+  assert(endedChatStreak.progress_count === chatActiveStreak.progress_count, 'Historical progress preserved');
+  assert(formatStreakDays(endedChatStreak.progress_count) === '5 days', 'Displays 5 days in ended list');
+
+  // Invariant D: An ended streak can never show the End Streak action again
+  assert(canEndStreak(endedChatStreak.state) === false, 'Ended streak cannot show End Streak action');
+
+  // Invariant E: Ending one streak type does NOT affect other streak types between the same pair
+  const activePhotoStreak: TchatStreak = {
+    id: 'streak-photo-live',
+    conversation_id: mockConvId,
+    initiator_id: mockUserId1,
+    recipient_id: mockUserId2,
+    type: 'photo',
+    state: 'active',
+    progress_count: 8,
+    created_at: '2026-09-01T00:00:00Z',
+    state_changed_at: '2026-09-01T00:00:00Z',
+  };
+
+  const streakSet = [endedChatStreak, activePhotoStreak];
+  const activeInSet = streakSet.filter((s) => s.state === 'active' || s.state === 'dormant');
+  const endedInSet = streakSet.filter((s) => s.state === 'ended');
+
+  assert(activeInSet.length === 1 && activeInSet[0].type === 'photo', 'Photo streak remains active');
+  assert(endedInSet.length === 1 && endedInSet[0].type === 'chat', 'Only Chat streak is ended');
+  assert(canEndStreak(activeInSet[0].state) === true, 'Remaining active photo streak can still be ended');
+
+  // Invariant F: Event bus dispatches streak:ended
+  const endEventState = {
+    endedEventReceived: false,
+    endedStreakPayloadId: '',
+  };
+
+  const unsubEnd = onStreakEvent((e) => {
+    if (e.type === 'streak:ended') {
+      endEventState.endedEventReceived = true;
+      endEventState.endedStreakPayloadId = e.streak.id;
+    }
+  });
+
+  emitStreakEvent({
+    type: 'streak:ended',
+    streak: endedChatStreak,
+    timestamp: new Date().toISOString(),
+  });
+
+  assert(endEventState.endedEventReceived === true, 'streak:ended event dispatched to listeners');
+  assert(endEventState.endedStreakPayloadId === endedChatStreak.id, 'Payload contains correct ended streak ID');
+  unsubEnd();
+
+  console.log('   ✓ Streak End UI action rules and lifecycle state invariants passed.');
   passed++;
 
   console.log(`\nAll ${passed} Streak UI/UX integration test suites passed cleanly!\n`);

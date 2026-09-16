@@ -13,19 +13,22 @@
 
 ## Current Stage
 
-**Streaks UI/UX Layer & Remote Database Schema Fully Implemented & Verified.**
+**Calls — Phase 1: Core Schema + Immediate Call Requests Implemented, Migrated & Verified.**
 - Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) are active with clean mobile-first ergonomics (`max-w-md` shell).
-- Full Supabase backend schemas for Auth, Identity, Connections, Blocks, Conversations, Ephemeral Media, and Streaks are applied on the remote Supabase instance (`jqghykhnnrfsjkkjhekf`).
-- Ephemeral Media domain implemented with private bucket `conversation-media`.
-- Streaks backend/persistence foundation active via `scripts/migrate.mjs`:
-  - Tables `streaks`, `streak_participant_days`, `streak_progress_days` active with RLS.
-  - All RPCs (`initiate_streak`, `accept_streak`, `decline_streak`, `cancel_streak`, `end_streak`, `get_conversation_streaks`, `get_streak_progress_history`, `evaluate_streak_dormancy`, `record_streak_qualifying_interaction`) active.
-- Streaks UI/UX layer implemented within 1:1 Conversation view:
-  - `StreakBadges`: Compact, calm badge bar showing active/dormant streaks with explicit "days" unit (e.g. `Chat · 18 days`). Never bare numbers or flame gamification.
-  - `PendingStreakBanner`: In-conversation banner displaying pending invitations with Accept / Decline for recipients and Cancel for initiators.
-  - `StreaksModal`: Intentional bottom sheet/modal to view continuity, today's qualification status, and start uninitiated types (Chat, Photo, Video).
-  - Seamless real-time event updates via `onStreakEvent` and auto-resync upon message sending/receiving.
-- 75 total automated tests passing across 5 test suites (`connections.test.ts`, `media.test.ts`, `lifecycle.test.ts`, `streaks.test.ts`, `streaks_ui.test.ts`).
+- Full Supabase backend schemas for Auth, Identity, Connections, Blocks, Conversations, Ephemeral Media, Streaks, and Calls are applied on the remote Supabase instance (`jqghykhnnrfsjkkjhekf`).
+- Calls Domain — Phase 1 Core Schema & Immediate Call Requests:
+  - Tables `calls` and `call_sessions` created with RLS and active on Supabase.
+  - Race-safe PostgreSQL RPCs active: `create_call_request`, `respond_to_call`, `cancel_call`, `get_conversation_calls`, `get_active_call_for_conversation`.
+  - Invariants strictly enforced: mandatory context/reason (presets or custom note 2..300 chars), connection-only validation, bidirectional block checks, caller identity verification (`auth.uid()`).
+  - Auto-cancellation triggers active: `trg_connection_deleted_calls` (cancels pending calls when connection deleted/unfriended) and `trg_block_created_calls` (cancels pending calls when either user blocks the other).
+  - Provisional expiration duration enforced (provisional default 120 seconds).
+  - WebRTC, microphone capture, audio streams, and scheduled calls intentionally excluded from Phase 1.
+- Minimal Contextual UI Layer:
+  - `ConversationHeader`: Contextual phone action button with subtle active-call indicator.
+  - `CallRequestModal`: Contextual bottom sheet/modal to select preset reason or custom note, explaining immediate call agreement.
+  - `PendingCallBanner`: In-conversation banner displaying countdown timer, reason, and Accept/Decline (for recipient) or Cancel (for initiator).
+  - Supabase Realtime channel subscription + client event bus (`onCallEvent`) for live synchronization.
+- 81 total automated tests passing across 6 test suites (`connections.test.ts`, `media.test.ts`, `lifecycle.test.ts`, `streaks.test.ts`, `streaks_ui.test.ts`, `calls.test.ts`).
 - Production build and TypeScript linting clean with 0 errors.
 
 ---
@@ -211,20 +214,31 @@ The following actions require access to external dashboards (Vercel and Supabase
 
 ## Current Task
 
-**Streaks Domain & Remote Database Migration (Complete)**
-- Configured automated migration runner `scripts/migrate.mjs` using `SUPABASE_ACCESS_TOKEN` via the Supabase Management API.
-- Executed and verified `supabase/migrations/20260915040000_create_tchat_streaks.sql` on remote Supabase instance `jqghykhnnrfsjkkjhekf` in 0.54s.
-- Created and verified remote tables: `streaks`, `streak_participant_days`, `streak_progress_days` (all RLS-secured).
-- Verified remote RPCs: `initiate_streak`, `accept_streak`, `decline_streak`, `cancel_streak`, `end_streak`, `get_conversation_streaks`, `get_streak_progress_history`, `evaluate_streak_dormancy`, `record_streak_qualifying_interaction`.
-- Added `npm run db:migrate` npm script for running migrations automatically.
-- Total 70 automated tests passing across 4 test suites with 0 lint errors and clean builds.
+**Calls — Phase 1: Core Schema + Immediate Call Requests (Complete)**
+- Created migration `supabase/migrations/20260916050000_create_tchat_calls.sql` establishing `calls` and `call_sessions` tables.
+- Executed migration on live Supabase instance (`jqghykhnnrfsjkkjhekf`) via `npm run db:migrate`.
+- Created and verified remote tables: `calls`, `call_sessions` with RLS and foreign key constraints.
+- Created and verified remote RPCs: `create_call_request`, `respond_to_call`, `cancel_call`, `get_conversation_calls`, `get_active_call_for_conversation`.
+- Created and verified relationship triggers: `trg_connection_deleted_calls` and `trg_block_created_calls` ensuring pending calls cancel when unfriended or blocked.
+- Implemented frontend calls domain layer:
+  - `src/domains/calls/types.ts`: models, statuses, outcomes, preset reasons, provisional expiration constant (120s).
+  - `src/domains/calls/validation.ts`: context reason validation, mode validation (immediate only), expiration calculations.
+  - `src/domains/calls/events.ts`: event bus for call lifecycle synchronization.
+  - `src/domains/calls/callsService.ts`: RPC wrapper service with schema error tolerance.
+  - `src/domains/calls/realtime.ts`: Supabase Realtime channel subscription helper.
+- Implemented minimal contextual UI:
+  - `src/components/conversations/calls/PendingCallBanner.tsx`: in-conversation banner with countdown timer, reason, Accept/Decline (for recipient) and Cancel (for initiator).
+  - `src/components/conversations/calls/CallRequestModal.tsx`: bottom sheet to select context presets or custom note.
+  - Integrated with `ConversationHeader` and `ConversationView`.
+- Added 6 automated tests in `test/calls.test.ts`. Total 81 passing tests across 6 test suites.
+- Typecheck (`tsc --noEmit`) and production build (`npm run build`) passing with 0 errors.
 
 ---
 
 ## Next Task
 
-**Streak UI Layer Implementation (Next Phase)**:
-- Build intentional, calm Streak indicators in 1:1 conversation headers.
-- Build Streak initiation modal/drawer with type selector (`chat`, `photo`, `video`).
-- Build pending streak invitation banner with Accept/Decline actions for recipients.
-- Visually communicate dormant state without punitive reset counters or noisy gamification.
+**Calls — Phase 2: Call Media / WebRTC Signaling & Active Call Session Layer**:
+- Define technical signaling architecture for WebRTC handshake using Supabase Realtime channels.
+- Implement microphone permissions and audio stream management for accepted calls.
+- Track call duration and record technical session records in `call_sessions`.
+- Handle network disconnects, caller abandonment, and graceful call termination.

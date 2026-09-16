@@ -93,12 +93,12 @@ async function main() {
     const fullPath = path.resolve(process.cwd(), targetFile);
     await runMigrationFile(fullPath);
   } else {
-    // Run the streaks migration by default if specified or prompt
-    const streaksMigration = path.resolve(
+    // Run the calls migration by default
+    const callsMigration = path.resolve(
       process.cwd(),
-      'supabase/migrations/20260915040000_create_tchat_streaks.sql'
+      'supabase/migrations/20260916050000_create_tchat_calls.sql'
     );
-    await runMigrationFile(streaksMigration);
+    await runMigrationFile(callsMigration);
   }
 
   // Verify created tables
@@ -108,9 +108,9 @@ async function main() {
   );
   console.log('Tables:', Array.isArray(tables) ? tables.map((t) => t.table_name).join(', ') : tables);
 
-  console.log('\n--- Verifying streak routines ---');
+  console.log('\n--- Verifying calls & streaks routines ---');
   const routines = await executeSql(
-    "SELECT routine_name FROM information_schema.routines WHERE routine_schema = 'public' AND routine_name LIKE '%streak%' ORDER BY routine_name;"
+    "SELECT routine_name FROM information_schema.routines WHERE routine_schema = 'public' AND (routine_name LIKE '%call%' OR routine_name LIKE '%streak%') ORDER BY routine_name;"
   );
   console.log('Routines:', Array.isArray(routines) ? routines.map((r) => r.routine_name).join(', ') : routines);
 }

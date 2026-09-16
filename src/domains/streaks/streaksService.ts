@@ -268,7 +268,8 @@ export async function cancelStreak(
  * Ends an active or dormant streak intentionally.
  */
 export async function endStreak(
-  streakId: string
+  streakId: string,
+  streak?: TchatStreak
 ): Promise<StreakServiceResult<void>> {
   if (!supabase) {
     return { error: 'Supabase client is not initialized.' };
@@ -284,6 +285,19 @@ export async function endStreak(
         return { isSchemaPending: true, error: error.message };
       }
       return { error: error.message };
+    }
+
+    if (streak) {
+      emitStreakEvent({
+        type: 'streak:ended',
+        streak: {
+          ...streak,
+          state: 'ended',
+          end_reason: 'manual_ended',
+          ended_at: new Date().toISOString(),
+        },
+        timestamp: new Date().toISOString(),
+      });
     }
 
     return {};

@@ -180,3 +180,12 @@ export function isStreakDormant(
 
   return false;
 }
+
+/**
+ * Determines whether a streak is eligible for user-initiated manual ending.
+ * Only active or dormant streaks can be manually ended.
+ * Pending, declined, cancelled, or already-ended streaks cannot be ended.
+ */
+export function canEndStreak(state: string | null | undefined): boolean {
+  return state === 'active' || state === 'dormant';
+}

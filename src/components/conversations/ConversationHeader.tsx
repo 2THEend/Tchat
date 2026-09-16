@@ -1,4 +1,4 @@
-import { ArrowLeft, User, RotateCw, Sparkles } from 'lucide-react';
+import { ArrowLeft, User, RotateCw, Sparkles, Phone } from 'lucide-react';
 import { TchatParticipantProfile } from '../../domains/conversations/types';
 
 interface ConversationHeaderProps {
@@ -9,6 +9,8 @@ interface ConversationHeaderProps {
   onOpenStreaks?: () => void;
   activeStreakCount?: number;
   hasPendingStreak?: boolean;
+  onOpenCallRequest?: () => void;
+  hasActiveCall?: boolean;
 }
 
 export function ConversationHeader({
@@ -19,6 +21,8 @@ export function ConversationHeader({
   onOpenStreaks,
   activeStreakCount = 0,
   hasPendingStreak = false,
+  onOpenCallRequest,
+  hasActiveCall = false,
 }: ConversationHeaderProps) {
   return (
     <header 
@@ -61,6 +65,22 @@ export function ConversationHeader({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
+        {onOpenCallRequest && (
+          <button
+            id="btn-header-call"
+            type="button"
+            onClick={onOpenCallRequest}
+            aria-label="Request call"
+            title="Request Call"
+            className="relative w-9 h-9 rounded-xl flex items-center justify-center text-stone-400 hover:text-emerald-400 hover:bg-stone-900 transition-colors cursor-pointer"
+          >
+            <Phone className="w-4 h-4" />
+            {hasActiveCall && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-stone-950 animate-pulse" />
+            )}
+          </button>
+        )}
+
         {onOpenStreaks && (
           <button
             id="btn-header-streaks"

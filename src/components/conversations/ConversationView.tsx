@@ -6,15 +6,19 @@ import {
 } from '../../domains/conversations/types';
 import { TchatMediaAsset } from '../../domains/media/types';
 import { TchatStreak } from '../../domains/streaks/types';
+import { TchatCall } from '../../domains/calls/types';
 import { 
   getConversationMessages, 
   sendMessage as apiSendMessage, 
   markConversationRead 
 } from '../../domains/conversations/conversationsService';
 import { getConversationStreaks } from '../../domains/streaks/streaksService';
+import { getActiveCallForConversation } from '../../domains/calls/callsService';
 import { subscribeToConversation } from '../../domains/conversations/realtime';
+import { subscribeToConversationCalls } from '../../domains/calls/realtime';
 import { onMediaEvent } from '../../domains/media/events';
 import { onStreakEvent } from '../../domains/streaks/events';
+import { onCallEvent } from '../../domains/calls/events';
 import { ConversationHeader } from './ConversationHeader';
 import { MessageList } from './MessageList';
 import { MessageComposer } from './MessageComposer';
@@ -22,6 +26,8 @@ import { FirstUseMediaSaveTip } from './FirstUseMediaSaveTip';
 import { StreakBadges } from './streaks/StreakBadges';
 import { PendingStreakBanner } from './streaks/PendingStreakBanner';
 import { StreaksModal } from './streaks/StreaksModal';
+import { PendingCallBanner } from './calls/PendingCallBanner';
+import { CallRequestModal } from './calls/CallRequestModal';
 
 interface ConversationViewProps {
   conversationId: string;
@@ -38,7 +44,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 }) => {
   const [messages, setMessages] = useState<TchatMessage[]>([]);
   const [streaks, setStreaks] = useState<TchatStreak[]>([]);
+  const [activeCall, setActiveCall] = useState<TchatCall | null>(null);
   const [isStreaksModalOpen, setIsStreaksModalOpen] = useState<boolean>(false);
+  const [isCallModalOpen, setIsCallModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
@@ -53,6 +61,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       isMountedRef.current = false;
     };
   }, []);
+
+  // Fetch active call for this conversation
+  const loadActiveCall = useCallback(async () => {
+    try {
+      const res = await getActiveCallForConversation(conversationId);
+      if (!isMountedRef.current) return;
+      if (res.data !== undefined) {
+        setActiveCall(res.data);
+      }
+    } catch (err) {
+      console.error('[ConversationView] Error loading active call:', err);
+    }
+  }, [conversationId]);
 
   // Fetch streaks for this conversation
   const loadStreaks = useCallback(async () => {
@@ -104,9 +125,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   useEffect(() => {
     loadMessages();
     loadStreaks();
-  }, [loadMessages, loadStreaks]);
+    loadActiveCall();
+  }, [loadMessages, loadStreaks, loadActiveCall]);
 
-  // Subscribe to Realtime messages and status updates
+  // Subscribe to Realtime messages, status updates, and calls
   useEffect(() => {
     const unsubscribe = subscribeToConversation(conversationId, {
       onNewMessage: (incomingMsg) => {
@@ -145,6 +167,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         // Authoritative resynchronization after connection drops
         loadMessages(true);
         loadStreaks();
+        loadActiveCall();
       },
     });
 
@@ -178,12 +201,27 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       }
     });
 
+    // Call event listener and Supabase Realtime subscription
+    const unsubscribeCallsRealtime = subscribeToConversationCalls(conversationId, {
+      onCallUpdated: () => {
+        loadActiveCall();
+      },
+    });
+
+    const unsubscribeCallEvent = onCallEvent((event) => {
+      if (event.call?.conversation_id === conversationId) {
+        loadActiveCall();
+      }
+    });
+
     return () => {
       unsubscribe();
       unsubscribeMedia();
       unsubscribeStreak();
+      unsubscribeCallsRealtime();
+      unsubscribeCallEvent();
     };
-  }, [conversationId, currentUserId, loadMessages, loadStreaks]);
+  }, [conversationId, currentUserId, loadMessages, loadStreaks, loadActiveCall]);
 
   // Handle message sending with optimistic UI updates
   const handleSendMessage = async (
@@ -285,6 +323,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     setIsRefreshing(true);
     loadMessages(false);
     loadStreaks();
+    loadActiveCall();
   };
 
   return (
@@ -301,6 +340,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         onOpenStreaks={() => setIsStreaksModalOpen(true)}
         activeStreakCount={streaks.filter((s) => s.state === 'active').length}
         hasPendingStreak={streaks.some((s) => s.state === 'pending')}
+        onOpenCallRequest={() => setIsCallModalOpen(true)}
+        hasActiveCall={!!activeCall && activeCall.status === 'pending'}
       />
 
       {/* Streak Continuity Badges */}
@@ -309,6 +350,16 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         onOpenModal={() => setIsStreaksModalOpen(true)}
         hasPending={streaks.some((s) => s.state === 'pending')}
       />
+
+      {/* Pending / Active Call Banner */}
+      {activeCall && (
+        <PendingCallBanner
+          call={activeCall}
+          currentUserId={currentUserId}
+          partnerName={partner.display_name || partner.username}
+          onCallUpdated={loadActiveCall}
+        />
+      )}
 
       {/* Pending Streak Requests (Accept / Decline / Cancel) */}
       {streaks
@@ -381,6 +432,15 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         partnerName={partner.display_name || partner.username}
         currentUserId={currentUserId}
         onStreakUpdated={loadStreaks}
+      />
+
+      {/* Call Request Modal */}
+      <CallRequestModal
+        isOpen={isCallModalOpen}
+        onClose={() => setIsCallModalOpen(false)}
+        conversationId={conversationId}
+        partnerName={partner.display_name || partner.username}
+        onCallRequested={loadActiveCall}
       />
     </div>
   );
