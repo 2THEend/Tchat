@@ -84,6 +84,10 @@ export interface CreateCallRequestInput {
   conversationId: string;
   presetReason?: string | null;
   customReason?: string | null;
+  /**
+   * @deprecated Immediate call expiration is strictly server-controlled (120s in Phase 1).
+   * Callers cannot choose an arbitrary duration.
+   */
   expiresInSeconds?: number;
   mode?: 'immediate'; // Phase 1 strictly immediate
 }

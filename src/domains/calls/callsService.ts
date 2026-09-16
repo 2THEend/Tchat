@@ -57,13 +57,23 @@ export async function createCallRequest(
       p_conversation_id: input.conversationId,
       p_preset_reason: reasonValidation.cleanPreset,
       p_custom_reason: reasonValidation.cleanCustom,
-      p_expires_in_seconds: input.expiresInSeconds || DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS,
       p_mode: 'immediate',
     });
 
     if (error) {
       if (isPendingSchemaError(error)) {
         return { data: null, error: 'Calls service is initializing.', isSchemaPending: true };
+      }
+      const msg = error.message || '';
+      const code = (error as any).code || '';
+      if (
+        code === '23505' ||
+        msg.includes('idx_unique_pending_call_per_conv') ||
+        msg.includes('unique_violation') ||
+        msg.includes('duplicate key') ||
+        msg.includes('already pending')
+      ) {
+        return { data: null, error: 'A call request is already pending in this conversation.' };
       }
       return { data: null, error: error.message };
     }

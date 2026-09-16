@@ -114,9 +114,12 @@ export function getRemainingCallRequestSeconds(requestExpiresAt?: string | null)
 }
 
 /**
- * Calculates provisional expiration timestamp.
+ * Calculates provisional expiration timestamp according to server-controlled policy.
+ * In Phase 1, the expiration policy is strictly server-controlled at 120 seconds.
+ * Client callers cannot choose an arbitrary expiration duration.
  */
-export function calculateCallExpirationDate(expiresInSeconds = DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS): string {
-  const boundedSeconds = Math.max(30, Math.min(600, expiresInSeconds));
-  return new Date(Date.now() + boundedSeconds * 1000).toISOString();
+export function calculateCallExpirationDate(_requestedSeconds?: number): string {
+  // Expiration duration is strictly server-controlled at 120 seconds.
+  // Any client-requested duration is ignored.
+  return new Date(Date.now() + DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS * 1000).toISOString();
 }

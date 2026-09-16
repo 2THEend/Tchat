@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { Phone, X, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { 
   CallPresetReason, 
-  CALL_PRESET_LABELS, 
-  DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS 
+  CALL_PRESET_LABELS 
 } from '../../../domains/calls/types';
 import { validateCallReason } from '../../../domains/calls/validation';
 import { createCallRequest } from '../../../domains/calls/callsService';
@@ -46,7 +45,6 @@ export const CallRequestModal: React.FC<CallRequestModalProps> = ({
         conversationId,
         presetReason: validation.cleanPreset,
         customReason: validation.cleanCustom,
-        expiresInSeconds: DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS,
         mode: 'immediate',
       });
 

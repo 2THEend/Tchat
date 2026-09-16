@@ -269,13 +269,9 @@ BEGIN
     RAISE EXCEPTION 'Custom call reason exceeds maximum allowed length of 300 characters.';
   END IF;
 
-  -- 5. Expiration calculation (Provisional default: 120s, minimum: 30s, maximum: 600s)
-  v_expiration_seconds := COALESCE(p_expires_in_seconds, 120);
-  IF v_expiration_seconds < 30 THEN
-    v_expiration_seconds := 30;
-  ELSIF v_expiration_seconds > 600 THEN
-    v_expiration_seconds := 600;
-  END IF;
+  -- 5. Expiration calculation (Phase 1: strictly server-controlled at 120 seconds)
+  -- The client cannot choose a shorter or longer expiration.
+  v_expiration_seconds := 120;
   v_expires_at := now() + (v_expiration_seconds || ' seconds')::interval;
 
   -- 6. Check for existing pending call in conversation
@@ -295,32 +291,39 @@ BEGIN
     END IF;
   END IF;
 
-  -- 7. Insert the pending call record
-  INSERT INTO public.calls (
-    conversation_id,
-    initiator_id,
-    recipient_id,
-    mode,
-    preset_reason,
-    custom_reason,
-    request_expires_at,
-    status,
-    created_at,
-    updated_at
-  )
-  VALUES (
-    p_conversation_id,
-    v_caller_id,
-    v_recipient_id,
-    'immediate',
-    v_clean_preset,
-    v_clean_custom,
-    v_expires_at,
-    'pending',
-    now(),
-    now()
-  )
-  RETURNING id INTO v_call_id;
+  -- 7. Insert the pending call record with race-safe unique violation handling
+  BEGIN
+    INSERT INTO public.calls (
+      conversation_id,
+      initiator_id,
+      recipient_id,
+      mode,
+      preset_reason,
+      custom_reason,
+      request_expires_at,
+      status,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      p_conversation_id,
+      v_caller_id,
+      v_recipient_id,
+      'immediate',
+      v_clean_preset,
+      v_clean_custom,
+      v_expires_at,
+      'pending',
+      now(),
+      now()
+    )
+    RETURNING id INTO v_call_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      -- Catches concurrent race condition on idx_unique_pending_call_per_conv
+      -- and translates to domain exception
+      RAISE EXCEPTION 'A call request is already pending in this conversation.';
+  END;
 
   -- 8. Return formatted JSON result
   SELECT jsonb_build_object(
