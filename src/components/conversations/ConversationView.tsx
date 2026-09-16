@@ -5,17 +5,23 @@ import {
   TchatParticipantProfile 
 } from '../../domains/conversations/types';
 import { TchatMediaAsset } from '../../domains/media/types';
+import { TchatStreak } from '../../domains/streaks/types';
 import { 
   getConversationMessages, 
   sendMessage as apiSendMessage, 
   markConversationRead 
 } from '../../domains/conversations/conversationsService';
+import { getConversationStreaks } from '../../domains/streaks/streaksService';
 import { subscribeToConversation } from '../../domains/conversations/realtime';
 import { onMediaEvent } from '../../domains/media/events';
+import { onStreakEvent } from '../../domains/streaks/events';
 import { ConversationHeader } from './ConversationHeader';
 import { MessageList } from './MessageList';
 import { MessageComposer } from './MessageComposer';
 import { FirstUseMediaSaveTip } from './FirstUseMediaSaveTip';
+import { StreakBadges } from './streaks/StreakBadges';
+import { PendingStreakBanner } from './streaks/PendingStreakBanner';
+import { StreaksModal } from './streaks/StreaksModal';
 
 interface ConversationViewProps {
   conversationId: string;
@@ -31,6 +37,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   onBack,
 }) => {
   const [messages, setMessages] = useState<TchatMessage[]>([]);
+  const [streaks, setStreaks] = useState<TchatStreak[]>([]);
+  const [isStreaksModalOpen, setIsStreaksModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
@@ -45,6 +53,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       isMountedRef.current = false;
     };
   }, []);
+
+  // Fetch streaks for this conversation
+  const loadStreaks = useCallback(async () => {
+    try {
+      const res = await getConversationStreaks(conversationId);
+      if (!isMountedRef.current) return;
+      if (res.data) {
+        setStreaks(res.data);
+      }
+    } catch (err) {
+      console.error('[ConversationView] Error loading streaks:', err);
+    }
+  }, [conversationId]);
 
   // Fetch messages from PostgreSQL database
   const loadMessages = useCallback(async (isSilent = false) => {
@@ -82,7 +103,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
   useEffect(() => {
     loadMessages();
-  }, [loadMessages]);
+    loadStreaks();
+  }, [loadMessages, loadStreaks]);
 
   // Subscribe to Realtime messages and status updates
   useEffect(() => {
@@ -108,9 +130,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           return [...prev, incomingMsg];
         });
 
-        // If message is from partner, mark it as read
+        // If message is from partner, mark it as read and refresh streaks
         if (incomingMsg.sender_id !== currentUserId) {
           markConversationRead(conversationId, currentUserId).catch(() => {});
+          loadStreaks();
         }
       },
       onMessageUpdated: (updatedMsg) => {
@@ -121,6 +144,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       onReconnected: () => {
         // Authoritative resynchronization after connection drops
         loadMessages(true);
+        loadStreaks();
       },
     });
 
@@ -147,11 +171,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       }
     });
 
+    // Streak event listener for immediate updates
+    const unsubscribeStreak = onStreakEvent((event) => {
+      if (event.streak?.conversation_id === conversationId) {
+        loadStreaks();
+      }
+    });
+
     return () => {
       unsubscribe();
       unsubscribeMedia();
+      unsubscribeStreak();
     };
-  }, [conversationId, currentUserId, loadMessages]);
+  }, [conversationId, currentUserId, loadMessages, loadStreaks]);
 
   // Handle message sending with optimistic UI updates
   const handleSendMessage = async (
@@ -213,6 +245,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
               : m
           )
         );
+        // Refresh streaks to pick up any qualifying interaction
+        loadStreaks();
       }
     } catch (err: any) {
       setMessages((prev) =>
@@ -250,6 +284,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const handleRefresh = () => {
     setIsRefreshing(true);
     loadMessages(false);
+    loadStreaks();
   };
 
   return (
@@ -263,7 +298,30 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         onBack={onBack}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
+        onOpenStreaks={() => setIsStreaksModalOpen(true)}
+        activeStreakCount={streaks.filter((s) => s.state === 'active').length}
+        hasPendingStreak={streaks.some((s) => s.state === 'pending')}
       />
+
+      {/* Streak Continuity Badges */}
+      <StreakBadges
+        streaks={streaks}
+        onOpenModal={() => setIsStreaksModalOpen(true)}
+        hasPending={streaks.some((s) => s.state === 'pending')}
+      />
+
+      {/* Pending Streak Requests (Accept / Decline / Cancel) */}
+      {streaks
+        .filter((s) => s.state === 'pending')
+        .map((pendingStreak) => (
+          <PendingStreakBanner
+            key={pendingStreak.id}
+            streak={pendingStreak}
+            currentUserId={currentUserId}
+            partnerName={partner.display_name || partner.username}
+            onStreakUpdated={loadStreaks}
+          />
+        ))}
 
       {/* Schema Pending Banner */}
       {isSchemaPending && (
@@ -312,6 +370,17 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         onSend={handleSendMessage}
         isSending={isSending}
         disabled={isSchemaPending}
+      />
+
+      {/* Streaks Modal / Drawer */}
+      <StreaksModal
+        isOpen={isStreaksModalOpen}
+        onClose={() => setIsStreaksModalOpen(false)}
+        streaks={streaks}
+        conversationId={conversationId}
+        partnerName={partner.display_name || partner.username}
+        currentUserId={currentUserId}
+        onStreakUpdated={loadStreaks}
       />
     </div>
   );

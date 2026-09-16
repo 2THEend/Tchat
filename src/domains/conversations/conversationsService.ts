@@ -11,6 +11,7 @@ import {
 } from './types';
 import { validateTextMessageContent } from './validation';
 import { emitConversationEvent } from './events';
+import { StreakType } from '../streaks/types';
 import { getUserTimezone } from '../streaks/validation';
 import { emitStreakEvent } from '../streaks/events';
 
@@ -359,6 +360,10 @@ export async function sendMessage(
     });
 
     if (data.streak_evaluation?.progress_created && data.streak_evaluation?.streak_id) {
+      const streakType: StreakType = messageType === 'media'
+        ? (data.media?.media_type === 'video' ? 'video' : 'photo')
+        : 'chat';
+
       emitStreakEvent({
         type: 'streak:progressed',
         streak: {
@@ -366,7 +371,7 @@ export async function sendMessage(
           conversation_id: conversationId,
           initiator_id: '',
           recipient_id: '',
-          type: 'chat',
+          type: streakType,
           state: data.streak_evaluation.state || 'active',
           progress_count: Number(data.streak_evaluation.new_progress_count || 0),
           created_at: message.created_at,

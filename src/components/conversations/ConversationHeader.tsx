@@ -1,4 +1,4 @@
-import { ArrowLeft, User, RotateCw } from 'lucide-react';
+import { ArrowLeft, User, RotateCw, Sparkles } from 'lucide-react';
 import { TchatParticipantProfile } from '../../domains/conversations/types';
 
 interface ConversationHeaderProps {
@@ -6,6 +6,9 @@ interface ConversationHeaderProps {
   onBack: () => void;
   onRefresh: () => void;
   isRefreshing?: boolean;
+  onOpenStreaks?: () => void;
+  activeStreakCount?: number;
+  hasPendingStreak?: boolean;
 }
 
 export function ConversationHeader({
@@ -13,6 +16,9 @@ export function ConversationHeader({
   onBack,
   onRefresh,
   isRefreshing = false,
+  onOpenStreaks,
+  activeStreakCount = 0,
+  hasPendingStreak = false,
 }: ConversationHeaderProps) {
   return (
     <header 
@@ -55,6 +61,24 @@ export function ConversationHeader({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
+        {onOpenStreaks && (
+          <button
+            id="btn-header-streaks"
+            type="button"
+            onClick={onOpenStreaks}
+            aria-label="Manage streaks"
+            title="Streaks"
+            className="relative w-9 h-9 rounded-xl flex items-center justify-center text-stone-400 hover:text-stone-200 hover:bg-stone-900 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            {hasPendingStreak ? (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-stone-950" />
+            ) : activeStreakCount > 0 ? (
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-stone-950" />
+            ) : null}
+          </button>
+        )}
+
         <button
           id="btn-refresh-conversation"
           type="button"

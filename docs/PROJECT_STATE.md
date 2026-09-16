@@ -13,18 +13,20 @@
 
 ## Current Stage
 
-**Streaks Domain & Remote Database Schema Applied and Verified.**
+**Streaks UI/UX Layer & Remote Database Schema Fully Implemented & Verified.**
 - Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) are active with clean mobile-first ergonomics (`max-w-md` shell).
 - Full Supabase backend schemas for Auth, Identity, Connections, Blocks, Conversations, Ephemeral Media, and Streaks are applied on the remote Supabase instance (`jqghykhnnrfsjkkjhekf`).
 - Ephemeral Media domain implemented with private bucket `conversation-media`.
-- Streaks domain and persistence foundation applied live via `scripts/migrate.mjs` using `SUPABASE_ACCESS_TOKEN`:
+- Streaks backend/persistence foundation active via `scripts/migrate.mjs`:
   - Tables `streaks`, `streak_participant_days`, `streak_progress_days` active with RLS.
   - All RPCs (`initiate_streak`, `accept_streak`, `decline_streak`, `cancel_streak`, `end_streak`, `get_conversation_streaks`, `get_streak_progress_history`, `evaluate_streak_dormancy`, `record_streak_qualifying_interaction`) active.
-  - Automatic migration runner `scripts/migrate.mjs` and npm script `npm run db:migrate` configured.
-- 11 unit test suites in `test/streaks.test.ts` passing (70 total tests across project).
-- UI organization & coherence pass completed: standardized header structures, permanent navigation strictly for places (`Home`, `Feed`, `Profile`), contextual navigation for events (`Connections`, `Conversation`), and unified stone palette styling across all views.
-- Offline-safe, conservative PWA installability with valid Web App Manifest, PNG/SVG icons, and Service Worker caching is active.
-- Prepared for Vercel deployment with `vercel.json` SPA routing rewrites and cache controls.
+- Streaks UI/UX layer implemented within 1:1 Conversation view:
+  - `StreakBadges`: Compact, calm badge bar showing active/dormant streaks with explicit "days" unit (e.g. `Chat · 18 days`). Never bare numbers or flame gamification.
+  - `PendingStreakBanner`: In-conversation banner displaying pending invitations with Accept / Decline for recipients and Cancel for initiators.
+  - `StreaksModal`: Intentional bottom sheet/modal to view continuity, today's qualification status, and start uninitiated types (Chat, Photo, Video).
+  - Seamless real-time event updates via `onStreakEvent` and auto-resync upon message sending/receiving.
+- 75 total automated tests passing across 5 test suites (`connections.test.ts`, `media.test.ts`, `lifecycle.test.ts`, `streaks.test.ts`, `streaks_ui.test.ts`).
+- Production build and TypeScript linting clean with 0 errors.
 
 ---
 
