@@ -46,7 +46,7 @@ export const PendingCallBanner: React.FC<PendingCallBannerProps> = ({
     return () => clearInterval(interval);
   }, [call.request_expires_at, call.status, onCallUpdated]);
 
-  if (call.status !== 'pending' && call.status !== 'accepted') {
+  if (call.status !== 'pending') {
     return null;
   }
 
@@ -139,12 +139,6 @@ export const PendingCallBanner: React.FC<PendingCallBannerProps> = ({
                 ? `${partnerName}: ${formattedReason}`
                 : `Sent to ${partnerName}: ${formattedReason}`}
             </p>
-
-            {call.status === 'accepted' && (
-              <p className="text-[11px] text-stone-400 mt-0.5">
-                Agreement confirmed. Technical audio streaming is disabled in Phase 1.
-              </p>
-            )}
 
             {actionError && (
               <p className="text-[11px] text-rose-400 flex items-center gap-1 mt-1 font-mono">

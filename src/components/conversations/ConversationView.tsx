@@ -27,6 +27,7 @@ import { StreakBadges } from './streaks/StreakBadges';
 import { PendingStreakBanner } from './streaks/PendingStreakBanner';
 import { StreaksModal } from './streaks/StreaksModal';
 import { PendingCallBanner } from './calls/PendingCallBanner';
+import { ActiveCallSession } from './calls/ActiveCallSession';
 import { CallRequestModal } from './calls/CallRequestModal';
 
 interface ConversationViewProps {
@@ -341,7 +342,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         activeStreakCount={streaks.filter((s) => s.state === 'active').length}
         hasPendingStreak={streaks.some((s) => s.state === 'pending')}
         onOpenCallRequest={() => setIsCallModalOpen(true)}
-        hasActiveCall={!!activeCall && activeCall.status === 'pending'}
+        hasActiveCall={!!activeCall && ['pending', 'accepted', 'connecting', 'connected'].includes(activeCall.status)}
       />
 
       {/* Streak Continuity Badges */}
@@ -351,9 +352,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         hasPending={streaks.some((s) => s.state === 'pending')}
       />
 
-      {/* Pending / Active Call Banner */}
-      {activeCall && (
+      {/* Pending Call Request Banner */}
+      {activeCall && activeCall.status === 'pending' && (
         <PendingCallBanner
+          call={activeCall}
+          currentUserId={currentUserId}
+          partnerName={partner.display_name || partner.username}
+          onCallUpdated={loadActiveCall}
+        />
+      )}
+
+      {/* Active WebRTC Call Session Bar */}
+      {activeCall && (activeCall.status === 'accepted' || activeCall.status === 'connecting' || activeCall.status === 'connected') && (
+        <ActiveCallSession
           call={activeCall}
           currentUserId={currentUserId}
           partnerName={partner.display_name || partner.username}

@@ -71,13 +71,49 @@ export interface TchatCall {
   updated_at: string;
 }
 
+export type CallSessionStatus = 'connecting' | 'connected' | 'ended' | 'failed';
+
 export interface TchatCallSession {
   id: string;
   call_id: string;
+  status: CallSessionStatus;
   started_at: string;
+  connected_at?: string | null;
   ended_at?: string | null;
   outcome?: 'success' | 'failed' | 'network_error' | 'abandoned' | null;
   created_at: string;
+}
+
+export interface StartCallSessionResult {
+  session_id: string;
+  call_id: string;
+  status: CallSessionStatus;
+  started_at: string;
+}
+
+export interface ConfirmCallConnectionResult {
+  success: boolean;
+  call_id: string;
+  session_id: string;
+  status: string;
+  started_at: string;
+}
+
+export interface RecordCallFailureResult {
+  success: boolean;
+  call_id: string;
+  session_id: string;
+  session_status: string;
+  session_outcome: string;
+  call_status: CallStatus;
+}
+
+export interface EndCallResult {
+  success: boolean;
+  call_id: string;
+  status: string;
+  outcome: string;
+  ended_at: string;
 }
 
 export interface CreateCallRequestInput {

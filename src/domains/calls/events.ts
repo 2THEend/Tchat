@@ -10,7 +10,10 @@ export type CallEventType =
   | 'call:accepted'
   | 'call:declined'
   | 'call:cancelled'
-  | 'call:expired';
+  | 'call:expired'
+  | 'call:connecting'
+  | 'call:connected'
+  | 'call:ended';
 
 export interface CallEvent {
   type: CallEventType;

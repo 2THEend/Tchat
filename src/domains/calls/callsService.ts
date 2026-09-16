@@ -8,7 +8,11 @@ import {
   TchatCall, 
   CallServiceResult, 
   CreateCallRequestInput, 
-  DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS 
+  DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS,
+  StartCallSessionResult,
+  ConfirmCallConnectionResult,
+  RecordCallFailureResult,
+  EndCallResult
 } from './types';
 import { validateCallReason, validateCallMode } from './validation';
 import { emitCallEvent } from './events';
@@ -215,3 +219,132 @@ export async function getConversationCalls(
     return { data: [], error: message };
   }
 }
+
+/**
+ * Starts a technical call session for an accepted call.
+ * Reverts/updates status to 'connecting' and records the attempt.
+ */
+export async function startCallSession(
+  callId: string
+): Promise<CallServiceResult<StartCallSessionResult>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('start_call_session', {
+      p_call_id: callId,
+    });
+
+    if (error) {
+      if (isPendingSchemaError(error)) {
+        return { data: null, error: 'Calls service is initializing.', isSchemaPending: true };
+      }
+      return { data: null, error: error.message };
+    }
+
+    return { data: data as StartCallSessionResult };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to start call session.';
+    return { data: null, error: message };
+  }
+}
+
+/**
+ * Confirms that the WebRTC peer connection has successfully connected.
+ * Authoritatively transitions the durable call and session to 'connected'.
+ */
+export async function confirmCallConnection(
+  callId: string,
+  sessionId: string
+): Promise<CallServiceResult<ConfirmCallConnectionResult>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('confirm_call_connection', {
+      p_call_id: callId,
+      p_session_id: sessionId,
+    });
+
+    if (error) {
+      if (isPendingSchemaError(error)) {
+        return { data: null, error: 'Calls service is initializing.', isSchemaPending: true };
+      }
+      return { data: null, error: error.message };
+    }
+
+    return { data: data as ConfirmCallConnectionResult };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to confirm call connection.';
+    return { data: null, error: message };
+  }
+}
+
+/**
+ * Records a technical WebRTC session failure.
+ * Invariant: Reverts durable call status from 'connecting' back to 'accepted'
+ * without terminally destroying the durable call agreement.
+ */
+export async function recordCallSessionFailure(
+  callId: string,
+  sessionId: string,
+  reason: 'failed' | 'network_error' | 'abandoned' = 'failed'
+): Promise<CallServiceResult<RecordCallFailureResult>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('record_call_session_failure', {
+      p_call_id: callId,
+      p_session_id: sessionId,
+      p_reason: reason,
+    });
+
+    if (error) {
+      if (isPendingSchemaError(error)) {
+        return { data: null, error: 'Calls service is initializing.', isSchemaPending: true };
+      }
+      return { data: null, error: error.message };
+    }
+
+    return { data: data as RecordCallFailureResult };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to record session failure.';
+    return { data: null, error: message };
+  }
+}
+
+/**
+ * Ends a call session and marks the durable call as 'ended'.
+ */
+export async function endCallSession(
+  callId: string,
+  sessionId?: string
+): Promise<CallServiceResult<EndCallResult>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('end_call_session', {
+      p_call_id: callId,
+      p_session_id: sessionId || null,
+    });
+
+    if (error) {
+      if (isPendingSchemaError(error)) {
+        return { data: null, error: 'Calls service is initializing.', isSchemaPending: true };
+      }
+      return { data: null, error: error.message };
+    }
+
+    return { data: data as EndCallResult };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to end call session.';
+    return { data: null, error: message };
+  }
+}
+
