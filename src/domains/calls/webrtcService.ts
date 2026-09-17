@@ -77,6 +77,7 @@ export class WebRTCCallManager {
   private isCleaningUp = false;
   private offerRetryTimer: NodeJS.Timeout | null = null;
   private connectionTimeoutTimer: NodeJS.Timeout | null = null;
+  private disconnectGraceTimer: NodeJS.Timeout | null = null;
   private pendingCandidates: RTCIceCandidateInit[] = [];
 
   constructor(options: WebRTCCallOptions) {
@@ -93,6 +94,8 @@ export class WebRTCCallManager {
   public async start(): Promise<void> {
     if (this.status !== 'idle') return;
 
+    console.info(`[Tchat WebRTC] Starting call session (callId: ${this.callId}, role: ${this.isInitiator ? 'initiator' : 'recipient'})`);
+
     // 1. Check browser WebRTC API support
     if (
       typeof window === 'undefined' ||
@@ -100,13 +103,16 @@ export class WebRTCCallManager {
       !navigator.mediaDevices ||
       !navigator.mediaDevices.getUserMedia
     ) {
-      this.updateStatus('failed', 'Your browser does not support WebRTC audio calls.');
+      const err = 'Your browser does not support WebRTC audio calls.';
+      console.error('[Tchat WebRTC] Browser unsupported:', err);
+      this.updateStatus('failed', err);
       return;
     }
 
     try {
       // 2. Request microphone permission
       this.updateStatus('requesting_permissions');
+      console.info('[Tchat WebRTC] Requesting microphone permission via getUserMedia...');
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -117,8 +123,10 @@ export class WebRTCCallManager {
           },
           video: false,
         });
+        console.info(`[Tchat WebRTC] getUserMedia granted: ${stream.getAudioTracks().length} audio track(s)`);
       } catch (mediaErr: unknown) {
         const error = mediaErr as Error;
+        console.error('[Tchat WebRTC] getUserMedia failed:', error.name, error.message);
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
           this.updateStatus(
             'failed',
@@ -138,40 +146,45 @@ export class WebRTCCallManager {
 
       // 3. Register or reuse technical call session via secure RPC
       this.updateStatus('connecting');
+      console.info('[Tchat WebRTC] Calling startCallSession RPC...');
       const sessionResult = await startCallSession(this.callId);
       if (sessionResult.error || !sessionResult.data) {
+        console.error('[Tchat WebRTC] startCallSession RPC failed:', sessionResult.error);
         this.cleanupLocalMedia();
         this.updateStatus('failed', sessionResult.error || 'Failed to initialize call session.');
         return;
       }
 
       this.sessionId = sessionResult.data.session_id;
+      console.info(`[Tchat WebRTC] startCallSession active session: ${this.sessionId} (status: ${sessionResult.data.status})`);
 
       // 4. Initialize RTCPeerConnection
       this.peerConnection = new RTCPeerConnection(RTC_CONFIG);
 
       // Add local audio tracks to peer connection
       this.localStream.getAudioTracks().forEach((track) => {
+        console.info(`[Tchat WebRTC] Adding local audio track to RTCPeerConnection (id: ${track.id}, enabled: ${track.enabled})`);
         this.peerConnection?.addTrack(track, this.localStream!);
       });
 
       // Handle remote audio track arrival
       this.peerConnection.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          this.remoteStream = event.streams[0];
-          this.onRemoteStream?.(this.remoteStream);
-          this.onStateChange({
-            status: this.status,
-            remoteStream: this.remoteStream,
-            isMuted: this.isMuted,
-            sessionId: this.sessionId,
-          });
-        }
+        const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+        console.info(`[Tchat WebRTC] Remote track arrived: kind=${event.track.kind}, id=${event.track.id}, readyState=${event.track.readyState}`);
+        this.remoteStream = stream;
+        this.onRemoteStream?.(this.remoteStream);
+        this.onStateChange({
+          status: this.status,
+          remoteStream: this.remoteStream,
+          isMuted: this.isMuted,
+          sessionId: this.sessionId,
+        });
       };
 
       // Handle ICE candidate generation
       this.peerConnection.onicecandidate = (event) => {
         if (event.candidate && this.sessionId) {
+          console.info(`[Tchat WebRTC] Local ICE candidate generated (${event.candidate.type || 'candidate'}, proto: ${event.candidate.protocol || 'any'})`);
           this.broadcastSignaling({
             type: 'ice_candidate',
             call_id: this.callId,
@@ -180,16 +193,39 @@ export class WebRTCCallManager {
             timestamp: new Date().toISOString(),
             candidate: event.candidate.toJSON(),
           });
+        } else if (!event.candidate) {
+          console.info('[Tchat WebRTC] Local ICE candidate gathering finished');
         }
       };
 
-      // Handle connection state changes
+      // Handle ICE gathering state changes
+      this.peerConnection.onicegatheringstatechange = () => {
+        console.info(`[Tchat WebRTC] ICE gathering state: ${this.peerConnection?.iceGatheringState}`);
+      };
+
+      // Handle ICE connection state changes
+      this.peerConnection.oniceconnectionstatechange = () => {
+        const iceState = this.peerConnection?.iceConnectionState;
+        console.info(`[Tchat WebRTC] ICE connection state: ${iceState}`);
+        if (iceState === 'connected' || iceState === 'completed') {
+          this.handleConnected();
+        } else if (iceState === 'failed') {
+          this.handleConnectionFailure('ICE connection failed: could not establish media path.');
+        } else if (iceState === 'disconnected') {
+          this.handleTransientDisconnect('ICE connection disconnected.');
+        }
+      };
+
+      // Handle overall peer connection state changes
       this.peerConnection.onconnectionstatechange = () => {
         const state = this.peerConnection?.connectionState;
+        console.info(`[Tchat WebRTC] Peer connection state: ${state}`);
         if (state === 'connected') {
           this.handleConnected();
-        } else if (state === 'failed' || state === 'disconnected') {
-          this.handleConnectionFailure('WebRTC peer connection lost or failed.');
+        } else if (state === 'failed') {
+          this.handleConnectionFailure('WebRTC peer connection failed: candidate pairs exhausted.');
+        } else if (state === 'disconnected') {
+          this.handleTransientDisconnect('WebRTC peer connection temporarily disconnected.');
         }
       };
 
@@ -199,6 +235,7 @@ export class WebRTCCallManager {
       // Set timeout for connection establishment (30s)
       this.connectionTimeoutTimer = setTimeout(() => {
         if (this.status === 'connecting') {
+          console.error('[Tchat WebRTC] Connection attempt timed out after 30 seconds.');
           this.handleConnectionFailure('Connection timed out. Remote peer did not connect.');
         }
       }, 30000);
@@ -209,6 +246,7 @@ export class WebRTCCallManager {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unexpected error starting call.';
+      console.error('[Tchat WebRTC] Exception during call start:', msg);
       this.handleConnectionFailure(msg);
     }
   }
@@ -220,6 +258,7 @@ export class WebRTCCallManager {
     if (!supabase) throw new Error('Supabase client is not available.');
 
     const topic = getCallSignalingTopic(this.callId);
+    console.info(`[Tchat WebRTC] Subscribing to secure signaling channel: ${topic}`);
 
     // Create private channel with broadcast listening
     this.signalingChannel = supabase.channel(topic, {
@@ -235,18 +274,25 @@ export class WebRTCCallManager {
       ({ payload }: { payload: unknown }) => {
         if (isValidSignalingPayload(payload)) {
           this.handleSignalingMessage(payload);
+        } else {
+          console.warn('[Tchat WebRTC] Received invalid signaling payload:', payload);
         }
       }
     );
 
     await new Promise<void>((resolve, reject) => {
       this.signalingChannel?.subscribe((status, err) => {
+        console.info(`[Tchat WebRTC] Signaling channel status: ${status}`);
         if (status === 'SUBSCRIBED') {
           resolve();
         } else if (status === 'CHANNEL_ERROR') {
-          reject(new Error(err?.message || 'Failed to subscribe to secure signaling channel.'));
+          const errMsg = err?.message || 'Failed to subscribe to secure signaling channel.';
+          console.error('[Tchat WebRTC] Signaling channel error:', errMsg);
+          reject(new Error(errMsg));
         } else if (status === 'TIMED_OUT') {
-          reject(new Error('Signaling channel subscription timed out.'));
+          const errMsg = 'Signaling channel subscription timed out.';
+          console.error('[Tchat WebRTC] Signaling channel timed out:', errMsg);
+          reject(new Error(errMsg));
         }
       });
     });
@@ -262,7 +308,7 @@ export class WebRTCCallManager {
       event: 'signal',
       payload: message,
     }).catch((err) => {
-      console.warn('[WebRTC Signaling] Broadcast send warning:', err);
+      console.warn('[Tchat WebRTC] Broadcast send warning:', err);
     });
   }
 
@@ -278,23 +324,23 @@ export class WebRTCCallManager {
     try {
       switch (message.type) {
         case 'offer':
+          console.info('[Tchat WebRTC] Handling remote offer...');
           await this.handleRemoteOffer(message);
           break;
-
         case 'answer':
+          console.info('[Tchat WebRTC] Handling remote answer...');
           await this.handleRemoteAnswer(message);
           break;
-
         case 'ice_candidate':
           await this.handleRemoteIceCandidate(message);
           break;
-
         case 'bye':
+          console.info(`[Tchat WebRTC] Remote peer sent bye: ${message.reason || 'No reason specified'}`);
           this.handleRemoteHangup(message.reason);
           break;
       }
     } catch (err) {
-      console.error('[WebRTC Signaling] Error processing signaling message:', err);
+      console.error('[Tchat WebRTC] Error processing signaling message:', err);
     }
   }
 
@@ -304,6 +350,7 @@ export class WebRTCCallManager {
   private async createAndSendOffer(): Promise<void> {
     if (!this.peerConnection || !this.sessionId) return;
 
+    console.info('[Tchat WebRTC] Creating local SDP offer...');
     const offer = await this.peerConnection.createOffer({
       offerToReceiveAudio: true,
       offerToReceiveVideo: false,
@@ -319,6 +366,7 @@ export class WebRTCCallManager {
       sdp: offer,
     };
 
+    console.info('[Tchat WebRTC] Broadcasting local SDP offer');
     this.broadcastSignaling(payload);
 
     // Self-healing: if remote peer hasn't answered within 3 seconds, resend offer up to 4 times
@@ -330,6 +378,7 @@ export class WebRTCCallManager {
       }
       retries++;
       if (this.peerConnection?.signalingState === 'have-local-offer') {
+        console.info(`[Tchat WebRTC] Resending offer (retry ${retries}/4)...`);
         this.broadcastSignaling(payload);
       }
     }, 3000);
@@ -341,12 +390,11 @@ export class WebRTCCallManager {
   private async handleRemoteOffer(message: OfferSignalingPayload): Promise<void> {
     if (!this.peerConnection || !this.sessionId) return;
 
-    // If we are already connected or have a local offer, follow polite peer logic
+    // Sequential rollback if in collision state (polite peer pattern)
     if (this.peerConnection.signalingState !== 'stable' && !this.isInitiator) {
-      await Promise.all([
-        this.peerConnection.setLocalDescription({ type: 'rollback' }),
-        this.peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp)),
-      ]);
+      console.info('[Tchat WebRTC] Rolling back local offer before setting remote offer (polite peer)');
+      await this.peerConnection.setLocalDescription({ type: 'rollback' });
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
     } else {
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
     }
@@ -355,6 +403,7 @@ export class WebRTCCallManager {
     await this.drainPendingCandidates();
 
     // Create and broadcast answer
+    console.info('[Tchat WebRTC] Creating local SDP answer...');
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
 
@@ -367,6 +416,7 @@ export class WebRTCCallManager {
       sdp: answer,
     };
 
+    console.info('[Tchat WebRTC] Broadcasting local SDP answer');
     this.broadcastSignaling(answerPayload);
   }
 
@@ -382,8 +432,11 @@ export class WebRTCCallManager {
     }
 
     if (this.peerConnection.signalingState === 'have-local-offer') {
+      console.info('[Tchat WebRTC] Applying remote SDP answer');
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
       await this.drainPendingCandidates();
+    } else {
+      console.warn(`[Tchat WebRTC] Received answer but signalingState is ${this.peerConnection.signalingState}`);
     }
   }
 
@@ -395,9 +448,9 @@ export class WebRTCCallManager {
 
     if (this.peerConnection.remoteDescription && this.peerConnection.remoteDescription.type) {
       try {
-        await this.peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+        await this.peerConnection.addIceCandidate(message.candidate);
       } catch (e) {
-        console.warn('[WebRTC] Failed to add ICE candidate:', e);
+        console.warn('[Tchat WebRTC] Failed to add ICE candidate:', e);
       }
     } else {
       this.pendingCandidates.push(message.candidate);
@@ -406,15 +459,36 @@ export class WebRTCCallManager {
 
   private async drainPendingCandidates(): Promise<void> {
     if (!this.peerConnection) return;
+    if (this.pendingCandidates.length > 0) {
+      console.info(`[Tchat WebRTC] Draining ${this.pendingCandidates.length} queued ICE candidate(s)`);
+    }
     while (this.pendingCandidates.length > 0) {
       const candidate = this.pendingCandidates.shift();
       if (candidate) {
         try {
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          await this.peerConnection.addIceCandidate(candidate);
         } catch (e) {
-          console.warn('[WebRTC] Failed to drain ICE candidate:', e);
+          console.warn('[Tchat WebRTC] Failed to drain ICE candidate:', e);
         }
       }
+    }
+  }
+
+  /**
+   * Handles transient disconnect states with a 6-second recovery grace period.
+   */
+  private handleTransientDisconnect(reason: string): void {
+    if (this.status === 'failed' || this.status === 'ended' || this.isCleaningUp) return;
+
+    console.warn(`[Tchat WebRTC] Transient disconnect: ${reason}. Starting 6s recovery grace timer...`);
+    if (!this.disconnectGraceTimer) {
+      this.disconnectGraceTimer = setTimeout(() => {
+        this.disconnectGraceTimer = null;
+        if (this.status !== 'connected') {
+          console.error('[Tchat WebRTC] Disconnect grace period expired. Failing call.');
+          this.handleConnectionFailure('Connection lost: network failed to recover within 6 seconds.');
+        }
+      }, 6000);
     }
   }
 
@@ -425,6 +499,12 @@ export class WebRTCCallManager {
   private async handleConnected(): Promise<void> {
     if (this.status === 'connected') return;
 
+    console.info('[Tchat WebRTC] Peer connection established! Transitioning to connected.');
+
+    if (this.disconnectGraceTimer) {
+      clearTimeout(this.disconnectGraceTimer);
+      this.disconnectGraceTimer = null;
+    }
     if (this.connectionTimeoutTimer) {
       clearTimeout(this.connectionTimeoutTimer);
       this.connectionTimeoutTimer = null;
@@ -437,7 +517,13 @@ export class WebRTCCallManager {
     this.updateStatus('connected');
 
     if (this.sessionId) {
-      await confirmCallConnection(this.callId, this.sessionId);
+      console.info('[Tchat WebRTC] Confirming call connection in database via confirmCallConnection...');
+      const confirmRes = await confirmCallConnection(this.callId, this.sessionId);
+      if (confirmRes.error) {
+        console.error('[Tchat WebRTC] confirmCallConnection RPC failed:', confirmRes.error);
+      } else {
+        console.info('[Tchat WebRTC] confirmCallConnection confirmed in database.');
+      }
     }
   }
 
@@ -449,7 +535,10 @@ export class WebRTCCallManager {
   private async handleConnectionFailure(errorMessage: string): Promise<void> {
     if (this.isCleaningUp || this.status === 'failed' || this.status === 'ended') return;
 
+    console.error(`[Tchat WebRTC] Connection failure: ${errorMessage}`);
+
     if (this.sessionId) {
+      console.info('[Tchat WebRTC] Recording call session failure in database...');
       await recordCallSessionFailure(this.callId, this.sessionId, 'network_error');
     }
 
@@ -541,6 +630,10 @@ export class WebRTCCallManager {
       clearInterval(this.offerRetryTimer);
       this.offerRetryTimer = null;
     }
+    if (this.disconnectGraceTimer) {
+      clearTimeout(this.disconnectGraceTimer);
+      this.disconnectGraceTimer = null;
+    }
 
     this.cleanupLocalMedia();
 
@@ -548,6 +641,8 @@ export class WebRTCCallManager {
       this.peerConnection.ontrack = null;
       this.peerConnection.onicecandidate = null;
       this.peerConnection.onconnectionstatechange = null;
+      this.peerConnection.oniceconnectionstatechange = null;
+      this.peerConnection.onicegatheringstatechange = null;
       this.peerConnection.close();
       this.peerConnection = null;
     }

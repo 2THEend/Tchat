@@ -43,8 +43,14 @@ export const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
 
   const isInitiator = call.initiator_id === currentUserId;
 
+  const onCallUpdatedRef = useRef(onCallUpdated);
+  useEffect(() => {
+    onCallUpdatedRef.current = onCallUpdated;
+  }, [onCallUpdated]);
+
   // Handles state updates from WebRTC engine
   const handleStateChange = useCallback((state: WebRTCStateChange) => {
+    console.info(`[ActiveCallSession] WebRTC state change: ${state.status}`, state.errorMessage || '');
     setWebrtcStatus(state.status);
     setIsMuted(!!state.isMuted);
 
@@ -57,11 +63,12 @@ export const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     }
 
     if (state.status === 'ended') {
-      onCallUpdated();
+      onCallUpdatedRef.current();
     }
-  }, [onCallUpdated]);
+  }, []);
 
   const handleRemoteStream = useCallback((stream: MediaStream) => {
+    console.info('[ActiveCallSession] Remote stream attached to audio element');
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = stream;
       remoteAudioRef.current.play().catch((err) => {
@@ -73,6 +80,7 @@ export const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
   // Initialize and start WebRTC calling engine
   const startCall = useCallback(() => {
     if (managerRef.current) {
+      console.info('[ActiveCallSession] Cleaning up previous WebRTC manager before starting new session');
       managerRef.current.cleanup();
       managerRef.current = null;
     }
@@ -92,7 +100,10 @@ export const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     manager.start();
   }, [call.id, currentUserId, isInitiator, handleStateChange, handleRemoteStream]);
 
-  // Automatically initiate WebRTC connection when entering accepted or connecting state
+  // Automatically initiate WebRTC connection on mount for this call
+  // CRITICAL: We depend strictly on call.id, NOT call.status.
+  // When call.status transitions (e.g. accepted -> connecting -> connected),
+  // we must NOT tear down and destroy the active RTCPeerConnection!
   useEffect(() => {
     if (call.status === 'accepted' || call.status === 'connecting' || call.status === 'connected') {
       if (!managerRef.current) {
@@ -102,11 +113,12 @@ export const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
 
     return () => {
       if (managerRef.current) {
+        console.info('[ActiveCallSession] Unmounting or call ID changed; cleaning up WebRTC manager');
         managerRef.current.cleanup();
         managerRef.current = null;
       }
     };
-  }, [call.id, call.status, startCall]);
+  }, [call.id, startCall]);
 
   // Duration counter when call is connected
   useEffect(() => {
