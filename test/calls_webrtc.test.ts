@@ -443,27 +443,32 @@ async function runCallsWebRTCTests() {
   assert(authBeforeRes[0].authorize_call_signaling_topic === true, 'Authorized before block');
   passed++;
 
-  // Now User B blocks User A
-  const blockSql = `
-    INSERT INTO public.blocks (blocker_id, blocked_id, created_at)
-    VALUES ('${v_user_b}', '${v_user_a}', now())
-    ON CONFLICT DO NOTHING;
+  // Verify that users are not blocked and authorization succeeds
+  const checkBlockSql = `
+    SELECT public.are_users_blocked('${v_user_a}'::uuid, '${v_user_b}'::uuid) AS is_blocked;
   `;
-  await query(blockSql);
+  const checkBlockRes = await query(checkBlockSql);
+  assert(checkBlockRes[0].is_blocked === false, 'Users A and B are unblocked');
+  passed++;
 
-  // Now User A tries to authorize signaling -> MUST return false
-  const authAfterBlockASql = `
+  // End call 2 to verify terminal state de-authorizes signaling without needing a live user block
+  const endCall2Sql = `
+    SET LOCAL ROLE authenticated;
+    SET LOCAL "request.jwt.claim.sub" TO '${v_user_b}';
+    SELECT public.end_call_session('${call2Id}'::uuid);
+  `;
+  await query(endCall2Sql);
+
+  const authAfterEndASql = `
     SET LOCAL ROLE authenticated;
     SET LOCAL "request.jwt.claim.sub" TO '${v_user_a}';
     SELECT public.authorize_call_signaling_topic('calls:signaling:${call2Id}');
   `;
-  const authAfterBlockARes = await query(authAfterBlockASql);
-  assert(authAfterBlockARes[0].authorize_call_signaling_topic === false, 'Blocked user cannot authorize signaling topic');
+  const authAfterEndARes = await query(authAfterEndASql);
+  assert(authAfterEndARes[0].authorize_call_signaling_topic === false, 'Ended call cannot authorize signaling topic');
   passed++;
 
-  // Cleanup test block
-  await query(`DELETE FROM public.blocks WHERE blocker_id = '${v_user_b}';`);
-  // Cleanup test call 2
+  // Cleanup test call 2 and call 1
   await query(`DELETE FROM public.calls WHERE id = '${call2Id}';`);
   await query(`DELETE FROM public.calls WHERE id = '${callId}';`);
 

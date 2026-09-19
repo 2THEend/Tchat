@@ -9,7 +9,9 @@ import {
   ArrowLeft, 
   KeyRound, 
   ShieldCheck, 
-  Clock 
+  Clock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { AuthMethod, AuthMode, AuthView, LegalDocumentType } from '../../domains/auth/types';
 import { 
@@ -54,6 +56,8 @@ export function AuthEntry({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
 
@@ -400,32 +404,54 @@ export function AuthEntry({
               <label htmlFor="input-new-password" className="text-[11px] font-medium text-stone-300 block">
                 New password
               </label>
-              <input
-                id="input-new-password"
-                type="password"
-                required
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters (letters & numbers)"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
-              />
+              <div className="relative">
+                <input
+                  id="input-new-password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters (letters & numbers)"
+                  className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
+                />
+                <button
+                  id="btn-toggle-new-password"
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-1 transition-colors cursor-pointer"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
 
             <div className="space-y-1.5">
               <label htmlFor="input-confirm-password" className="text-[11px] font-medium text-stone-300 block">
                 Confirm new password
               </label>
-              <input
-                id="input-confirm-password"
-                type="password"
-                required
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repeat new password"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
-              />
+              <div className="relative">
+                <input
+                  id="input-confirm-password"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
+                />
+                <button
+                  id="btn-toggle-confirm-password"
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-1 transition-colors cursor-pointer"
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -635,16 +661,27 @@ export function AuthEntry({
                       </button>
                     )}
                   </div>
-                  <input
-                    id="input-email-password"
-                    type="password"
-                    required
-                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={mode === 'signup' ? 'Min 8 characters (letters & numbers)' : '••••••••'}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
-                  />
+                  <div className="relative">
+                    <input
+                      id="input-email-password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={mode === 'signup' ? 'Min 8 characters (letters & numbers)' : '••••••••'}
+                      className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
+                    />
+                    <button
+                      id="btn-toggle-email-password"
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-1 transition-colors cursor-pointer"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
 
                 {mode === 'signup' && (
@@ -652,16 +689,27 @@ export function AuthEntry({
                     <label htmlFor="input-email-confirm" className="text-[11px] font-medium text-stone-300 block">
                       Confirm password
                     </label>
-                    <input
-                      id="input-email-confirm"
-                      type="password"
-                      required
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Repeat password"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
-                    />
+                    <div className="relative">
+                      <input
+                        id="input-email-confirm"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat password"
+                        className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
+                      />
+                      <button
+                        id="btn-toggle-email-confirm"
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-1 transition-colors cursor-pointer"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -742,16 +790,27 @@ export function AuthEntry({
                       </button>
                     )}
                   </div>
-                  <input
-                    id="input-username-password"
-                    type="password"
-                    required
-                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={mode === 'signup' ? 'Min 8 characters (letters & numbers)' : '••••••••'}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
-                  />
+                  <div className="relative">
+                    <input
+                      id="input-username-password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={mode === 'signup' ? 'Min 8 characters (letters & numbers)' : '••••••••'}
+                      className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
+                    />
+                    <button
+                      id="btn-toggle-username-password"
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-1 transition-colors cursor-pointer"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
 
                 {mode === 'signup' && (
@@ -759,16 +818,27 @@ export function AuthEntry({
                     <label htmlFor="input-username-confirm" className="text-[11px] font-medium text-stone-300 block">
                       Confirm password
                     </label>
-                    <input
-                      id="input-username-confirm"
-                      type="password"
-                      required
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Repeat password"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
-                    />
+                    <div className="relative">
+                      <input
+                        id="input-username-confirm"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat password"
+                        className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-stone-900 border border-stone-800 focus:border-stone-600 focus:outline-none text-stone-100 text-xs placeholder:text-stone-600"
+                      />
+                      <button
+                        id="btn-toggle-username-confirm"
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-1 transition-colors cursor-pointer"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 )}
 

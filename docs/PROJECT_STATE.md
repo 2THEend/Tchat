@@ -92,6 +92,41 @@ These conceptual distinctions must **NEVER** be collapsed:
   - Lightweight one-time educational tip (`FirstUseMediaSaveTip`) explaining the 24-hour retention and save action.
   - PWA Service Worker caching policy updated to strictly forbid caching conversation media and Supabase storage responses.
   - PostgreSQL migration created: `supabase/migrations/20260914030000_create_tchat_media_assets.sql`.
+- **Groups Domain**:
+  - **Stage 3 (Core Schema & RLS Foundation)**:
+    - Tables: `groups`, `group_members`, `group_join_requests`, `group_bans`.
+    - Hard structural database constraints for lifetime (`1_day`, `3_days`, `1_week`), max size (<= 30), visibility (`discoverable`, `private`), access mode (`open`, `request`, `question`), and joining question requirement.
+    - Exactly-One-Admin invariant for operating active groups via deferred constraint trigger and unique index.
+    - Role capacity limits (maximum 1 mod, maximum 5 specials) enforced via database triggers.
+    - Dynamic 50% capacity surge protection via `get_group_effective_access_mode`.
+    - Strict Row Level Security policies protecting private groups, member lists, and banned users.
+    - Migration applied: `supabase/migrations/20260918090000_create_tchat_groups_phase1.sql`.
+  - **Stage 4 (Membership & Access Operations)**:
+    - Server-authoritative, race-safe `SECURITY DEFINER` RPCs with row-level locks (`FOR UPDATE`):
+      - `create_group`: Atomically inserts group and provisions caller as initial `admin`.
+      - `join_group`: Direct join on open groups with capacity check (`< max_size`), dynamic 50% surge protection, rejoining role reset (rejoins strictly as `member`), ban/removal checks, and mutual block prevention.
+      - `request_to_join_group`: Validates request mode, answering joining questions, duplicate pending request prevention, removed/banned member blocks, and mutual safety blocks.
+      - `cancel_group_join_request`: Requester-only cancellation of pending requests.
+      - `approve_group_join_request`: Admin/mod review with race-safe capacity check under row lock.
+      - `decline_group_join_request`: Admin/mod review marking request declined.
+      - `assign_group_member_role`: Admin-only promotion/demotion respecting role limits (1 mod, 5 specials).
+      - `transfer_group_admin`: Atomic admin handoff with predecessor demoted to `member`, preserving exactly-one-admin invariant.
+      - `leave_group`: Enforces admin succession requirement when group has other active members; sole Admin departure marks group as `deleted` because the group is now empty.
+      - `remove_group_member`: Admin/mod member removal; prevents mod removing admin or peer mod; records removal and blocks rejoining via normal paths.
+      - `ban_group_member`: Admin/mod user banning; removes active membership, creates ban record, cancels pending join requests; blocks rejoining.
+      - `unban_group_member`: Admin/mod unban operation deleting ban record.
+      - `get_group_details` & `list_group_members`: Authenticated read helpers with visibility and ban enforcement.
+      - `get_group_join_requests`: Admin/mod access for viewing pending requests.
+    - Canonical Invariants & Lifecycle Rules:
+      - Canonical Validation Limits: Group name (2–60 characters), reason (3–300 characters).
+      - Sole-Admin Lifecycle: Admin with other active members cannot leave without atomically designating an active successor; Admin transfer is strictly atomic; Admin cannot be removed or banned; leaving as sole remaining member transitions group to `deleted` (empty group cleanup).
+    - Client Domain Service (`src/domains/groups/`):
+      - Comprehensive TypeScript types (`Group`, `GroupMember`, `GroupJoinRequest`, `GroupBan`, etc.).
+      - Client-side input validation (`validateGroupName`, `validateGroupReason`, `validateGroupLifetime`, `validateGroupSize`, `validateCreateGroupInput`).
+      - In-memory event bus (`emitGroupEvent`, `onGroupEvent`) for real-time UI synchronization.
+      - `groupsService` providing client RPC invocation wrappers with authentication guards.
+    - Migration applied: `supabase/migrations/20260918100000_groups_membership_and_access_operations.sql`.
+    - Automated test suites: `test/groups_schema.test.ts` (Stage 3) and `test/groups_membership.test.ts` (Stage 4, 14 suites) passing cleanly.
 - **UI Organization & Coherence Pass**:
   - Navigation architecture: "Permanent navigation is for places (`Home`, `Feed`, `Profile`). Contextual navigation is for things happening (`Connections`, `Conversation`)."
   - `Home`: Standardized "Today" header with day/date hierarchy, unread badge indicators, connection alerts banner, and filtered Today's conversations list.

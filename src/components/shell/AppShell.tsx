@@ -36,6 +36,9 @@ import {
 import { onConversationEvent } from '../../domains/conversations/events';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 import { OfflineIndicator } from '../pwa/OfflineIndicator';
+import { CreateGroupView } from '../groups/CreateGroupView';
+import { GroupArrivalView } from '../groups/GroupArrivalView';
+import { GroupDetails } from '../../domains/groups/types';
 
 export function AppShell() {
   // Cached snapshot for instant authenticated resume without blocking screens
@@ -44,6 +47,8 @@ export function AppShell() {
   // Navigation
   const [currentPlace, setCurrentPlace] = useState<NavigationPlace>('home');
   const [isViewingConnections, setIsViewingConnections] = useState<boolean>(false);
+  const [isCreatingGroup, setIsCreatingGroup] = useState<boolean>(false);
+  const [viewingGroup, setViewingGroup] = useState<GroupDetails | null>(null);
   const [incomingCount, setIncomingCount] = useState<number>(0);
   const [connectionsCount, setConnectionsCount] = useState<number>(0);
 
@@ -624,8 +629,8 @@ export function AppShell() {
         id="app-shell-container"
         className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
       >
-        {/* Top Header (hidden when inside active 1:1 conversation) */}
-        {!activeConversation && (
+        {/* Top Header (hidden when inside active 1:1 conversation or group views) */}
+        {!activeConversation && !isCreatingGroup && !viewingGroup && (
           <header 
             id="app-status-header"
             className="w-full pt-3 px-6 pb-2 flex items-center justify-between text-stone-400 text-[11px] font-medium select-none z-10 border-b border-stone-900/50"
@@ -651,6 +656,24 @@ export function AppShell() {
               partner={activeConversation.other_participant}
               onBack={handleCloseConversation}
             />
+          ) : isCreatingGroup ? (
+            <CreateGroupView
+              currentUserId={user.id}
+              onBack={() => setIsCreatingGroup(false)}
+              onGroupCreated={(group) => {
+                setIsCreatingGroup(false);
+                setViewingGroup(group);
+              }}
+            />
+          ) : viewingGroup ? (
+            <GroupArrivalView
+              group={viewingGroup}
+              onBack={() => setViewingGroup(null)}
+              onCreateAnother={() => {
+                setViewingGroup(null);
+                setIsCreatingGroup(true);
+              }}
+            />
           ) : currentPlace === 'home' && isViewingConnections ? (
             <ConnectionsView
               currentUserId={user.id}
@@ -665,6 +688,12 @@ export function AppShell() {
               onSignOut={handleSignOut}
               isSigningOut={isSigningOut}
               onOpenConnections={() => setIsViewingConnections(true)}
+              onCreateGroup={() => {
+                setIsViewingConnections(false);
+                setActiveConversation(null);
+                setViewingGroup(null);
+                setIsCreatingGroup(true);
+              }}
               incomingRequestsCount={incomingCount}
               connectionsCount={connectionsCount}
               conversations={conversations}
@@ -673,17 +702,17 @@ export function AppShell() {
             />
           ) : null}
 
-          {!activeConversation && currentPlace === 'feed' && (
+          {!activeConversation && !isCreatingGroup && !viewingGroup && currentPlace === 'feed' && (
             <FeedView />
           )}
 
-          {!activeConversation && currentPlace === 'profile' && isViewingConnections ? (
+          {!activeConversation && !isCreatingGroup && !viewingGroup && currentPlace === 'profile' && isViewingConnections ? (
             <ConnectionsView
               currentUserId={user.id}
               onBackToHome={() => setIsViewingConnections(false)}
               onOpenConversation={handleOpenConversationFromConnection}
             />
-          ) : !activeConversation && currentPlace === 'profile' ? (
+          ) : !activeConversation && !isCreatingGroup && !viewingGroup && currentPlace === 'profile' ? (
             <ProfileView
               user={user}
               profile={profile}
@@ -696,13 +725,15 @@ export function AppShell() {
           ) : null}
         </section>
 
-        {/* Permanent Places Navigation (hidden when inside active conversation) */}
-        {!activeConversation && (
+        {/* Permanent Places Navigation (hidden when inside active conversation or group flow) */}
+        {!activeConversation && !isCreatingGroup && !viewingGroup && (
           <Navigation 
             currentPlace={currentPlace} 
             onSelectPlace={(place) => {
               handleCloseConversation();
               setIsViewingConnections(false);
+              setIsCreatingGroup(false);
+              setViewingGroup(null);
               setCurrentPlace(place);
             }} 
           />

@@ -5,7 +5,8 @@ import {
   ArrowRight, 
   Inbox, 
   Sparkles,
-  MessageSquare
+  MessageSquare,
+  Plus
 } from 'lucide-react';
 import { User } from '@supabase/supabase-js';
 import { TchatProfile, TchatAccount } from '../../domains/identity/types';
@@ -24,6 +25,7 @@ interface HomeAuthenticatedViewProps {
   conversations?: TchatConversation[];
   isLoadingConversations?: boolean;
   onSelectConversation?: (conversation: TchatConversation) => void;
+  onCreateGroup?: () => void;
 }
 
 export function HomeAuthenticatedView({
@@ -34,6 +36,7 @@ export function HomeAuthenticatedView({
   conversations = [],
   isLoadingConversations = false,
   onSelectConversation,
+  onCreateGroup,
 }: HomeAuthenticatedViewProps) {
   // Format today's human-friendly date
   const todayFormatted = new Date().toLocaleDateString(undefined, {
@@ -99,7 +102,47 @@ export function HomeAuthenticatedView({
         onOpenConnections={() => onOpenConnections?.()}
       />
 
-      {/* 4. Contextual Connections & Discovery Bar */}
+      {/* 4. Intentional Temporary Groups Section */}
+      {onCreateGroup && (
+        <div 
+          id="home-groups-context-bar"
+          className="p-4 rounded-2xl bg-stone-900/50 border border-stone-800/70 space-y-3"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-300">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-stone-200">
+                  Temporary Groups
+                </h3>
+                <p className="text-[11px] text-stone-400">
+                  Intentional spaces with defined lifetimes
+                </p>
+              </div>
+            </div>
+
+            <button
+              id="btn-home-create-group"
+              type="button"
+              onClick={onCreateGroup}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-white text-stone-950 text-xs font-semibold tracking-tight transition-colors cursor-pointer shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Group</span>
+            </button>
+          </div>
+
+          <div className="pt-2 border-t border-stone-800/50 flex items-center justify-between text-[11px]">
+            <span className="text-stone-400">
+              Ephemeral gatherings of up to 30 people.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Contextual Connections & Discovery Bar */}
       {onOpenConnections && (
         <div 
           id="home-connections-context-bar"

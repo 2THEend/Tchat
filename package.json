@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "test": "tsx test/connections.test.ts && tsx test/media.test.ts && tsx test/lifecycle.test.ts && tsx test/streaks.test.ts && tsx test/streaks_ui.test.ts && tsx test/calls.test.ts && tsx test/calls_webrtc.test.ts",
+    "test": "tsx test/connections.test.ts && tsx test/media.test.ts && tsx test/lifecycle.test.ts && tsx test/streaks.test.ts && tsx test/streaks_ui.test.ts && tsx test/streaks_regression.test.ts && tsx test/calls.test.ts && tsx test/calls_webrtc.test.ts && tsx test/groups_schema.test.ts && tsx test/groups_membership.test.ts && tsx test/groups_creation_flow.test.ts",
     "db:migrate": "node scripts/migrate.mjs",
     "lint": "tsc --noEmit"
   },
