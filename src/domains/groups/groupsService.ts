@@ -11,8 +11,10 @@ import {
   GroupMessageType,
   GroupRole,
   GroupServiceResult,
+  TchatGroup,
   TchatGroupJoinRequest,
   TchatGroupMember,
+  UserActiveGroupItem,
 } from './types';
 import {
   validateAssignRole,
@@ -455,6 +457,164 @@ export async function getGroupJoinRequests(
     return { data: null, error: err.message || 'Failed to fetch join requests' };
   }
 }
+
+/**
+ * Checks if the caller has an active pending join request for the given group.
+ */
+export async function getMyPendingJoinRequest(
+  groupId: string
+): Promise<GroupServiceResult<TchatGroupJoinRequest | null>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const currentUserId = sessionData?.session?.user?.id;
+    if (!currentUserId) {
+      return { data: null, error: 'Not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('group_join_requests')
+      .select('id, group_id, user_id, question_answer, status, created_at')
+      .eq('group_id', groupId)
+      .eq('user_id', currentUserId)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data: data || null, error: null };
+  } catch (err: any) {
+    return { data: null, error: err.message || 'Failed to check join request' };
+  }
+}
+
+/**
+ * Checks if the caller is banned from the given group.
+ */
+export async function checkGroupBanStatus(
+  groupId: string
+): Promise<GroupServiceResult<{ isBanned: boolean; reason?: string | null }>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const currentUserId = sessionData?.session?.user?.id;
+    if (!currentUserId) {
+      return { data: null, error: 'Not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('group_bans')
+      .select('reason')
+      .eq('group_id', groupId)
+      .eq('user_id', currentUserId)
+      .maybeSingle();
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data: { isBanned: !!data, reason: data?.reason || null }, error: null };
+  } catch (err: any) {
+    return { data: null, error: err.message || 'Failed to check ban status' };
+  }
+}
+
+/**
+ * Fetches all groups where the specified user is an active member.
+ */
+export async function getUserActiveGroups(
+  userId: string
+): Promise<GroupServiceResult<UserActiveGroupItem[]>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('group_members')
+      .select(`
+        group_id,
+        role,
+        joined_at,
+        group:groups (
+          id,
+          name,
+          reason,
+          cover_url,
+          lifetime,
+          expires_at,
+          grace_expires_at,
+          visibility,
+          access_mode,
+          joining_question,
+          max_size,
+          lifecycle_status,
+          created_by_id,
+          created_at,
+          updated_at
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    const items: UserActiveGroupItem[] = (data || [])
+      .filter((row: any) => row.group && row.group.lifecycle_status === 'active')
+      .map((row: any) => ({
+        group_id: row.group_id,
+        role: row.role as GroupRole,
+        joined_at: row.joined_at,
+        group: row.group as TchatGroup,
+      }));
+
+    return { data: items, error: null };
+  } catch (err: any) {
+    return { data: null, error: err.message || 'Failed to fetch active groups' };
+  }
+}
+
+/**
+ * Fetches active discoverable groups for discovery/joining.
+ */
+export async function getDiscoverableGroups(
+  limit: number = 20
+): Promise<GroupServiceResult<TchatGroup[]>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('visibility', 'discoverable')
+      .eq('lifecycle_status', 'active')
+      .gt('expires_at', nowIso)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data: (data as TchatGroup[]) || [], error: null };
+  } catch (err: any) {
+    return { data: null, error: err.message || 'Failed to fetch discoverable groups' };
+  }
+}
+
 
 /**
  * Sends a message in a group.

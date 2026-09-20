@@ -107,3 +107,57 @@ export function validateAssignRole(newRole: string): ValidationResult {
   }
   return { isValid: true };
 }
+
+/**
+ * Maps database/RPC error strings into concise, human-readable messages.
+ * Prevents raw Postgres or Supabase traces from surfacing in the UI.
+ */
+export function formatGroupError(rawError?: string | null, fallback = 'An unexpected error occurred. Please try again.'): string {
+  if (!rawError) return fallback;
+
+  const str = rawError.toLowerCase();
+
+  if (str.includes('reached maximum capacity') || str.includes('group is full') || str.includes('maximum capacity reached')) {
+    return 'This group has reached its maximum member capacity.';
+  }
+  if (str.includes('has expired') || str.includes('no longer active') || str.includes('expired')) {
+    return 'This group has expired or is no longer active.';
+  }
+  if (str.includes('already pending') || str.includes('pending join request')) {
+    return 'You already have a pending join request for this group.';
+  }
+  if (str.includes('banned') || str.includes('not permitted to join')) {
+    return 'You are restricted from participating in this group.';
+  }
+  if (str.includes('removed from group') || str.includes('previously removed')) {
+    return 'You were removed from this group and cannot rejoin.';
+  }
+  if (str.includes('safety blocks') || str.includes('blocked')) {
+    return 'Cannot join this group due to user safety or block settings.';
+  }
+  if (str.includes('without designating an active member as successor') || str.includes('select another active member')) {
+    return 'As group administrator, you must select another active member as successor before leaving.';
+  }
+  if (str.includes('designated successor is not an active member')) {
+    return 'The chosen successor is not an active member of this group.';
+  }
+  if (str.includes('only group admins') || str.includes('only admins or mods') || str.includes('not authorized')) {
+    return 'Only group administrators or moderators are permitted to perform this action.';
+  }
+  if (str.includes('no longer pending')) {
+    return 'This join request is no longer pending.';
+  }
+  if (str.includes('not found') || str.includes('inaccessible')) {
+    return 'This group could not be found or is private and inaccessible.';
+  }
+  if (str.includes('not authenticated')) {
+    return 'You must be signed in to perform this action.';
+  }
+  if (str.includes('answer between 2 and 500 characters')) {
+    return 'An answer between 2 and 500 characters is required.';
+  }
+
+  // Generic fallback without raw database artifacts
+  return rawError.replace(/^[A-Z0-9_]+:\s*/, '').slice(0, 150);
+}
+

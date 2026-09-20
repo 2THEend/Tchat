@@ -110,6 +110,13 @@ export interface GroupServiceResult<T> {
   error: string | null;
 }
 
+export interface UserActiveGroupItem {
+  group_id: string;
+  role: GroupRole;
+  joined_at: string;
+  group: TchatGroup;
+}
+
 export type GroupMessageType = 'text' | 'media' | 'system';
 
 export interface GroupMessageSender {

@@ -1046,17 +1046,17 @@ BEGIN
       RAISE EXCEPTION 'Designated successor is not an active member of this group';
     END IF;
 
-    -- Atomic succession and departure
-    UPDATE public.group_members
-    SET role = 'admin'
-    WHERE id = v_successor_member.id;
-
+    -- Atomic succession and departure (depart old admin first to satisfy unique active admin index)
     UPDATE public.group_members
     SET
       status = 'left',
       role = 'member',
       left_at = now()
     WHERE id = v_caller_member.id;
+
+    UPDATE public.group_members
+    SET role = 'admin'
+    WHERE id = v_successor_member.id;
 
     RETURN jsonb_build_object(
       'success', true,

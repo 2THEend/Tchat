@@ -38,7 +38,12 @@ import { PWAInstallButton } from '../pwa/PWAInstallButton';
 import { OfflineIndicator } from '../pwa/OfflineIndicator';
 import { CreateGroupView } from '../groups/CreateGroupView';
 import { GroupArrivalView } from '../groups/GroupArrivalView';
-import { GroupDetails } from '../../domains/groups/types';
+import { GroupDetailView } from '../groups/GroupDetailView';
+import { ActiveGroupView } from '../groups/ActiveGroupView';
+import { DiscoverGroupsModal } from '../groups/DiscoverGroupsModal';
+import { GroupDetails, UserActiveGroupItem } from '../../domains/groups/types';
+import { getUserActiveGroups } from '../../domains/groups/groupsService';
+import { onGroupEvent } from '../../domains/groups/events';
 
 export function AppShell() {
   // Cached snapshot for instant authenticated resume without blocking screens
@@ -49,6 +54,11 @@ export function AppShell() {
   const [isViewingConnections, setIsViewingConnections] = useState<boolean>(false);
   const [isCreatingGroup, setIsCreatingGroup] = useState<boolean>(false);
   const [viewingGroup, setViewingGroup] = useState<GroupDetails | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [activeGroupSpace, setActiveGroupSpace] = useState<GroupDetails | null>(null);
+  const [isDiscoveringGroups, setIsDiscoveringGroups] = useState<boolean>(false);
+  const [activeUserGroups, setActiveUserGroups] = useState<UserActiveGroupItem[]>([]);
+  const [isLoadingActiveGroups, setIsLoadingActiveGroups] = useState<boolean>(false);
   const [incomingCount, setIncomingCount] = useState<number>(0);
   const [connectionsCount, setConnectionsCount] = useState<number>(0);
 
@@ -146,6 +156,37 @@ export function AppShell() {
     });
     return unsub;
   }, [user, refreshConversations]);
+
+  // Refresh User Active Groups
+  const refreshUserGroups = useCallback(async (userId: string) => {
+    setIsLoadingActiveGroups(true);
+    try {
+      const res = await getUserActiveGroups(userId);
+      if (res.data) {
+        setActiveUserGroups(res.data);
+      }
+    } catch {
+      // Gracefully ignore
+    } finally {
+      setIsLoadingActiveGroups(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user && profile) {
+      refreshUserGroups(user.id);
+    }
+  }, [user, profile, refreshUserGroups]);
+
+  // Subscribe to group domain events
+  useEffect(() => {
+    const unsub = onGroupEvent(() => {
+      if (user) {
+        refreshUserGroups(user.id);
+      }
+    });
+    return unsub;
+  }, [user, refreshUserGroups]);
 
   const handleOpenConversation = useCallback((conv: TchatConversation) => {
     setActiveConversation(conv);
@@ -630,7 +671,7 @@ export function AppShell() {
         className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
       >
         {/* Top Header (hidden when inside active 1:1 conversation or group views) */}
-        {!activeConversation && !isCreatingGroup && !viewingGroup && (
+        {!activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && (
           <header 
             id="app-status-header"
             className="w-full pt-3 px-6 pb-2 flex items-center justify-between text-stone-400 text-[11px] font-medium select-none z-10 border-b border-stone-900/50"
@@ -656,13 +697,51 @@ export function AppShell() {
               partner={activeConversation.other_participant}
               onBack={handleCloseConversation}
             />
+          ) : activeGroupSpace ? (
+            <ActiveGroupView
+              group={activeGroupSpace}
+              currentUserId={user.id}
+              onBackToHome={() => {
+                setActiveGroupSpace(null);
+                refreshUserGroups(user.id);
+              }}
+              onViewDetails={() => {
+                setSelectedGroupId(activeGroupSpace.id);
+                setActiveGroupSpace(null);
+              }}
+              onLeaveSuccess={() => {
+                setActiveGroupSpace(null);
+                refreshUserGroups(user.id);
+              }}
+              onRefreshGroup={() => {
+                refreshUserGroups(user.id);
+              }}
+            />
+          ) : selectedGroupId ? (
+            <GroupDetailView
+              groupId={selectedGroupId}
+              currentUserId={user.id}
+              onBack={() => {
+                setSelectedGroupId(null);
+                refreshUserGroups(user.id);
+              }}
+              onEnterGroup={(grp) => {
+                setSelectedGroupId(null);
+                setActiveGroupSpace(grp);
+              }}
+              onLeaveSuccess={() => {
+                setSelectedGroupId(null);
+                refreshUserGroups(user.id);
+              }}
+            />
           ) : isCreatingGroup ? (
             <CreateGroupView
               currentUserId={user.id}
               onBack={() => setIsCreatingGroup(false)}
               onGroupCreated={(group) => {
                 setIsCreatingGroup(false);
-                setViewingGroup(group);
+                setSelectedGroupId(group.id);
+                refreshUserGroups(user.id);
               }}
             />
           ) : viewingGroup ? (
@@ -692,7 +771,17 @@ export function AppShell() {
                 setIsViewingConnections(false);
                 setActiveConversation(null);
                 setViewingGroup(null);
+                setSelectedGroupId(null);
+                setActiveGroupSpace(null);
                 setIsCreatingGroup(true);
+              }}
+              activeGroups={activeUserGroups}
+              isLoadingActiveGroups={isLoadingActiveGroups}
+              onSelectGroup={(groupId) => {
+                setSelectedGroupId(groupId);
+              }}
+              onFindGroups={() => {
+                setIsDiscoveringGroups(true);
               }}
               incomingRequestsCount={incomingCount}
               connectionsCount={connectionsCount}
@@ -702,17 +791,17 @@ export function AppShell() {
             />
           ) : null}
 
-          {!activeConversation && !isCreatingGroup && !viewingGroup && currentPlace === 'feed' && (
+          {!activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && currentPlace === 'feed' && (
             <FeedView />
           )}
 
-          {!activeConversation && !isCreatingGroup && !viewingGroup && currentPlace === 'profile' && isViewingConnections ? (
+          {!activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && currentPlace === 'profile' && isViewingConnections ? (
             <ConnectionsView
               currentUserId={user.id}
               onBackToHome={() => setIsViewingConnections(false)}
               onOpenConversation={handleOpenConversationFromConnection}
             />
-          ) : !activeConversation && !isCreatingGroup && !viewingGroup && currentPlace === 'profile' ? (
+          ) : !activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && currentPlace === 'profile' ? (
             <ProfileView
               user={user}
               profile={profile}
@@ -725,8 +814,17 @@ export function AppShell() {
           ) : null}
         </section>
 
+        {/* Discover Groups Modal */}
+        <DiscoverGroupsModal
+          isOpen={isDiscoveringGroups}
+          onClose={() => setIsDiscoveringGroups(false)}
+          onSelectGroup={(groupId) => {
+            setSelectedGroupId(groupId);
+          }}
+        />
+
         {/* Permanent Places Navigation (hidden when inside active conversation or group flow) */}
-        {!activeConversation && !isCreatingGroup && !viewingGroup && (
+        {!activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && (
           <Navigation 
             currentPlace={currentPlace} 
             onSelectPlace={(place) => {
@@ -734,6 +832,8 @@ export function AppShell() {
               setIsViewingConnections(false);
               setIsCreatingGroup(false);
               setViewingGroup(null);
+              setSelectedGroupId(null);
+              setActiveGroupSpace(null);
               setCurrentPlace(place);
             }} 
           />

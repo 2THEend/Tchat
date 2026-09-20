@@ -6,11 +6,19 @@ import {
   Inbox, 
   Sparkles,
   MessageSquare,
-  Plus
+  Plus,
+  Compass,
+  Clock,
+  ShieldCheck,
+  Shield,
+  Star,
+  User as UserIcon,
+  Loader2
 } from 'lucide-react';
 import { User } from '@supabase/supabase-js';
 import { TchatProfile, TchatAccount } from '../../domains/identity/types';
 import { TchatConversation } from '../../domains/conversations/types';
+import { UserActiveGroupItem, GroupRole } from '../../domains/groups/types';
 import { TodayConversationsList } from '../conversations/TodayConversationsList';
 
 interface HomeAuthenticatedViewProps {
@@ -26,6 +34,10 @@ interface HomeAuthenticatedViewProps {
   isLoadingConversations?: boolean;
   onSelectConversation?: (conversation: TchatConversation) => void;
   onCreateGroup?: () => void;
+  activeGroups?: UserActiveGroupItem[];
+  isLoadingActiveGroups?: boolean;
+  onSelectGroup?: (groupId: string) => void;
+  onFindGroups?: () => void;
 }
 
 export function HomeAuthenticatedView({
@@ -37,6 +49,10 @@ export function HomeAuthenticatedView({
   isLoadingConversations = false,
   onSelectConversation,
   onCreateGroup,
+  activeGroups = [],
+  isLoadingActiveGroups = false,
+  onSelectGroup,
+  onFindGroups,
 }: HomeAuthenticatedViewProps) {
   // Format today's human-friendly date
   const todayFormatted = new Date().toLocaleDateString(undefined, {
@@ -102,8 +118,8 @@ export function HomeAuthenticatedView({
         onOpenConnections={() => onOpenConnections?.()}
       />
 
-      {/* 4. Intentional Temporary Groups Section */}
-      {onCreateGroup && (
+      {/* 4. Intentional Temporary Groups Section (Isolated from 1:1 Home activity) */}
+      {(onCreateGroup || onFindGroups || activeGroups.length > 0) && (
         <div 
           id="home-groups-context-bar"
           className="p-4 rounded-2xl bg-stone-900/50 border border-stone-800/70 space-y-3"
@@ -123,16 +139,116 @@ export function HomeAuthenticatedView({
               </div>
             </div>
 
-            <button
-              id="btn-home-create-group"
-              type="button"
-              onClick={onCreateGroup}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-white text-stone-950 text-xs font-semibold tracking-tight transition-colors cursor-pointer shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Create Group</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              {onFindGroups && (
+                <button
+                  id="btn-home-find-groups"
+                  type="button"
+                  onClick={onFindGroups}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors cursor-pointer"
+                  title="Find or enter a group"
+                >
+                  <Compass className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Find</span>
+                </button>
+              )}
+
+              {onCreateGroup && (
+                <button
+                  id="btn-home-create-group"
+                  type="button"
+                  onClick={onCreateGroup}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-white text-stone-950 text-xs font-semibold tracking-tight transition-colors cursor-pointer shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Active Groups Cards */}
+          {isLoadingActiveGroups ? (
+            <div className="py-4 flex items-center justify-center gap-2 text-stone-400 text-xs">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Loading your active groups...</span>
+            </div>
+          ) : activeGroups.length > 0 ? (
+            <div className="space-y-2 pt-1">
+              {activeGroups.map((item) => {
+                const grp = item.group;
+                const lifetimeLabel = grp.lifetime === '1_day' 
+                  ? '1d' 
+                  : grp.lifetime === '3_days' 
+                  ? '3d' 
+                  : '1w';
+
+                return (
+                  <div
+                    key={item.group_id}
+                    id={`home-group-item-${item.group_id}`}
+                    onClick={() => onSelectGroup?.(item.group_id)}
+                    className="p-3 rounded-xl bg-stone-900/70 border border-stone-800/80 hover:bg-stone-900 hover:border-stone-700/80 transition-all cursor-pointer flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {grp.cover_url ? (
+                        <img 
+                          src={grp.cover_url} 
+                          alt={grp.name} 
+                          className="w-8 h-8 rounded-lg object-cover shrink-0 border border-stone-800"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-400 shrink-0">
+                          <Users className="w-4 h-4" />
+                        </div>
+                      )}
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-semibold text-stone-100 truncate">
+                            {grp.name}
+                          </p>
+                          {item.role === 'admin' ? (
+                            <span className="px-1.5 py-0.2 rounded bg-emerald-950/80 border border-emerald-800/60 text-[9px] font-mono text-emerald-300">
+                              admin
+                            </span>
+                          ) : item.role === 'mod' ? (
+                            <span className="px-1.5 py-0.2 rounded bg-blue-950/80 border border-blue-800/60 text-[9px] font-mono text-blue-300">
+                              mod
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[11px] text-stone-400 truncate">
+                          {grp.reason}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>{lifetimeLabel}</span>
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-stone-500" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-2 text-[11px] text-stone-400 flex items-center justify-between">
+              <span>You haven't joined any groups today.</span>
+              {onFindGroups && (
+                <button
+                  type="button"
+                  onClick={onFindGroups}
+                  className="text-amber-400 hover:text-amber-300 transition-colors cursor-pointer font-medium"
+                >
+                  Browse Groups
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="pt-2 border-t border-stone-800/50 flex items-center justify-between text-[11px]">
             <span className="text-stone-400">

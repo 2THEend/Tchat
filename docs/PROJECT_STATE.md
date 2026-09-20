@@ -126,7 +126,22 @@ These conceptual distinctions must **NEVER** be collapsed:
       - In-memory event bus (`emitGroupEvent`, `onGroupEvent`) for real-time UI synchronization.
       - `groupsService` providing client RPC invocation wrappers with authentication guards.
     - Migration applied: `supabase/migrations/20260918100000_groups_membership_and_access_operations.sql`.
-    - Automated test suites: `test/groups_schema.test.ts` (Stage 3) and `test/groups_membership.test.ts` (Stage 4, 14 suites) passing cleanly.
+  - **Phase 6.2: Group Entry & Membership (UI & End-to-End Integration)**:
+    - User Interface components:
+      - `DiscoverGroupsModal`: Browse discoverable active groups, access modes, capacity pills, and search filter.
+      - `GroupDetailView`: Dedicated non-member view showing reason, access mode badge, lifetime countdown, joining question prompts with validation, join/request actions, and pending state indicator.
+      - `ActiveGroupView`: Dedicated temporary space for active members with header metadata, active member counter, member list modal, join request review modal, and leave action.
+      - `GroupMembersModal`: Active member list with role badges (Admin, Mod, Special, Member) and management actions.
+      - `GroupJoinRequestsModal`: Pending applicant review list with question answers, approve, and decline actions.
+      - `GroupLeaveModal`: Leave confirmation with mandatory successor selector when the leaving user is the group administrator.
+    - AppShell & Home Integration:
+      - AppShell tracks contextual group state (`selectedGroupId`, `activeGroupSpace`, `isDiscoveringGroups`).
+      - Home displays "Active Groups" horizontal cards section separated from 1:1 conversation items, honoring the core principle: "Group activity must not appear as ordinary 1:1 Home conversation activity."
+      - Event listeners synchronized across group join, leave, request, and role change events.
+    - Error & Invariant Handling:
+      - Human-readable error formatting via `formatGroupError` preventing raw Postgres/Supabase traces from showing in the UI.
+      - Fixed atomic succession order in `leave_group` so old admin departs before new admin is promoted, cleanly satisfying the `idx_group_members_unique_admin` constraint.
+    - Automated tests: `test/groups_entry_membership_ui_flow.test.ts` (7 suites) and `test/groups_membership.test.ts` (14 suites) passing cleanly.
 - **UI Organization & Coherence Pass**:
   - Navigation architecture: "Permanent navigation is for places (`Home`, `Feed`, `Profile`). Contextual navigation is for things happening (`Connections`, `Conversation`)."
   - `Home`: Standardized "Today" header with day/date hierarchy, unread badge indicators, connection alerts banner, and filtered Today's conversations list.
