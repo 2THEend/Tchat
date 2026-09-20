@@ -134,16 +134,21 @@ export async function cancelGroupJoinRequest(
     return { data: null, error: 'Supabase client is not initialized.' };
   }
 
+  const cleanReqId = (requestId || '').trim();
+  if (!cleanReqId) {
+    return { data: null, error: 'Invalid or missing join request identifier.' };
+  }
+
   try {
     const { data, error } = await supabase.rpc('cancel_group_join_request', {
-      p_request_id: requestId,
+      p_request_id: cleanReqId,
     });
 
     if (error) {
       return { data: null, error: error.message };
     }
 
-    emitGroupEvent('group:request_cancelled', groupId, { requestId });
+    emitGroupEvent('group:request_cancelled', groupId, { requestId: cleanReqId });
     return { data, error: null };
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to cancel join request' };
@@ -161,16 +166,21 @@ export async function approveGroupJoinRequest(
     return { data: null, error: 'Supabase client is not initialized.' };
   }
 
+  const cleanReqId = (requestId || '').trim();
+  if (!cleanReqId) {
+    return { data: null, error: 'Invalid or missing join request identifier.' };
+  }
+
   try {
     const { data, error } = await supabase.rpc('approve_group_join_request', {
-      p_request_id: requestId,
+      p_request_id: cleanReqId,
     });
 
     if (error) {
       return { data: null, error: error.message };
     }
 
-    emitGroupEvent('group:request_approved', groupId, { requestId, userId: data.user_id });
+    emitGroupEvent('group:request_approved', groupId, { requestId: cleanReqId, userId: data?.user_id });
     return { data, error: null };
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to approve join request' };
@@ -188,16 +198,21 @@ export async function declineGroupJoinRequest(
     return { data: null, error: 'Supabase client is not initialized.' };
   }
 
+  const cleanReqId = (requestId || '').trim();
+  if (!cleanReqId) {
+    return { data: null, error: 'Invalid or missing join request identifier.' };
+  }
+
   try {
     const { data, error } = await supabase.rpc('decline_group_join_request', {
-      p_request_id: requestId,
+      p_request_id: cleanReqId,
     });
 
     if (error) {
       return { data: null, error: error.message };
     }
 
-    emitGroupEvent('group:request_declined', groupId, { requestId });
+    emitGroupEvent('group:request_declined', groupId, { requestId: cleanReqId });
     return { data, error: null };
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to decline join request' };
@@ -452,7 +467,14 @@ export async function getGroupJoinRequests(
       return { data: null, error: error.message };
     }
 
-    return { data, error: null };
+    const mapped: TchatGroupJoinRequest[] = (data || []).map((r: any) => ({
+      ...r,
+      id: r.id || r.request_id,
+      request_id: r.request_id || r.id,
+      group_id: r.group_id || groupId,
+    }));
+
+    return { data: mapped, error: null };
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to fetch join requests' };
   }
@@ -487,7 +509,15 @@ export async function getMyPendingJoinRequest(
       return { data: null, error: error.message };
     }
 
-    return { data: data || null, error: null };
+    if (!data) return { data: null, error: null };
+
+    return {
+      data: {
+        ...data,
+        request_id: data.id,
+      },
+      error: null,
+    };
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to check join request' };
   }

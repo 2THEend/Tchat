@@ -47,6 +47,7 @@ export interface TchatGroupMember {
 
 export interface TchatGroupJoinRequest {
   id: string;
+  request_id?: string;
   group_id: string;
   user_id: string;
   username?: string;

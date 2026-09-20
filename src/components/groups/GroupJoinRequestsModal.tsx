@@ -59,6 +59,11 @@ export function GroupJoinRequestsModal({
   if (!isOpen) return null;
 
   const handleApprove = async (requestId: string) => {
+    if (!requestId) {
+      setActionError('Invalid join request identifier.');
+      return;
+    }
+
     setProcessingId(requestId);
     setActionError(null);
 
@@ -67,13 +72,18 @@ export function GroupJoinRequestsModal({
       setActionError(formatGroupError(res.error));
       setProcessingId(null);
     } else {
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
+      setRequests((prev) => prev.filter((r) => r.id !== requestId && r.request_id !== requestId));
       setProcessingId(null);
       onRequestProcessed();
     }
   };
 
   const handleDecline = async (requestId: string) => {
+    if (!requestId) {
+      setActionError('Invalid join request identifier.');
+      return;
+    }
+
     setProcessingId(requestId);
     setActionError(null);
 
@@ -82,7 +92,7 @@ export function GroupJoinRequestsModal({
       setActionError(formatGroupError(res.error));
       setProcessingId(null);
     } else {
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
+      setRequests((prev) => prev.filter((r) => r.id !== requestId && r.request_id !== requestId));
       setProcessingId(null);
       onRequestProcessed();
     }
@@ -165,7 +175,8 @@ export function GroupJoinRequestsModal({
           ) : (
             <div className="space-y-3">
               {requests.map((req) => {
-                const isBusy = processingId === req.id;
+                const reqId = req.id || req.request_id || '';
+                const isBusy = processingId === reqId;
                 const createdFormatted = new Date(req.created_at).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
@@ -175,8 +186,8 @@ export function GroupJoinRequestsModal({
 
                 return (
                   <div
-                    key={req.id}
-                    id={`request-item-${req.id}`}
+                    key={reqId}
+                    id={`request-item-${reqId}`}
                     className="p-4 rounded-2xl bg-stone-900/50 border border-stone-800/70 space-y-3 hover:bg-stone-900/70 transition-colors"
                   >
                     {/* Requester Identity */}
@@ -228,10 +239,10 @@ export function GroupJoinRequestsModal({
                     {/* Action Controls */}
                     <div className="flex items-center justify-end gap-2 pt-1 border-t border-stone-800/50">
                       <button
-                        id={`btn-decline-request-${req.id}`}
+                        id={`btn-decline-request-${reqId}`}
                         type="button"
                         disabled={isBusy}
-                        onClick={() => handleDecline(req.id)}
+                        onClick={() => handleDecline(reqId)}
                         className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-rose-300 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
                       >
                         {isBusy ? (
@@ -243,10 +254,10 @@ export function GroupJoinRequestsModal({
                       </button>
 
                       <button
-                        id={`btn-approve-request-${req.id}`}
+                        id={`btn-approve-request-${reqId}`}
                         type="button"
                         disabled={isBusy}
-                        onClick={() => handleApprove(req.id)}
+                        onClick={() => handleApprove(reqId)}
                         className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold tracking-tight transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-sm shadow-emerald-950"
                       >
                         {isBusy ? (

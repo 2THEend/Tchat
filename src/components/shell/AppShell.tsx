@@ -42,7 +42,7 @@ import { GroupDetailView } from '../groups/GroupDetailView';
 import { ActiveGroupView } from '../groups/ActiveGroupView';
 import { DiscoverGroupsModal } from '../groups/DiscoverGroupsModal';
 import { GroupDetails, UserActiveGroupItem } from '../../domains/groups/types';
-import { getUserActiveGroups } from '../../domains/groups/groupsService';
+import { getUserActiveGroups, getGroupDetails } from '../../domains/groups/groupsService';
 import { onGroupEvent } from '../../domains/groups/events';
 
 export function AppShell() {
@@ -713,8 +713,14 @@ export function AppShell() {
                 setActiveGroupSpace(null);
                 refreshUserGroups(user.id);
               }}
-              onRefreshGroup={() => {
+              onRefreshGroup={async () => {
                 refreshUserGroups(user.id);
+                if (activeGroupSpace) {
+                  const detailsRes = await getGroupDetails(activeGroupSpace.id);
+                  if (detailsRes.data) {
+                    setActiveGroupSpace(detailsRes.data);
+                  }
+                }
               }}
             />
           ) : selectedGroupId ? (
