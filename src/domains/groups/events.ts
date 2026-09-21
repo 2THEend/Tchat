@@ -17,7 +17,8 @@ export type GroupEventType =
   | 'group:request_declined'
   | 'group:request_cancelled'
   | 'group:message_received'
-  | 'group:messages_read';
+  | 'group:messages_read'
+  | 'group:media_saved';
 
 export interface GroupEvent {
   type: GroupEventType;

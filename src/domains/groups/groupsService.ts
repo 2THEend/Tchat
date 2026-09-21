@@ -8,6 +8,7 @@ import {
   CreateGroupInput,
   GroupDetails,
   GroupMessage,
+  GroupMessageMedia,
   GroupMessageType,
   GroupRole,
   GroupServiceResult,
@@ -21,6 +22,7 @@ import {
   validateCreateGroupInput,
   validateJoinQuestionAnswer,
 } from './validation';
+import { validateMediaFile } from '../media/validation';
 import { emitGroupEvent } from './events';
 
 /**
@@ -780,7 +782,7 @@ export async function createGroupMediaAsset(
   fileSizeBytes?: number,
   originalFilename?: string,
   allowRecipientSave: boolean = true
-): Promise<GroupServiceResult<any>> {
+): Promise<GroupServiceResult<GroupMessageMedia>> {
   if (!supabase) {
     return { data: null, error: 'Supabase client is not initialized.' };
   }
@@ -800,8 +802,101 @@ export async function createGroupMediaAsset(
       return { data: null, error: error.message };
     }
 
-    return { data, error: null };
+    return { data: data as GroupMessageMedia, error: null };
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to create group media asset' };
+  }
+}
+
+/**
+ * Uploads an ephemeral media file to private Supabase Storage
+ * under groups/${groupId}/ and registers it via create_group_media_asset RPC.
+ */
+export async function uploadGroupMediaFile(
+  groupId: string,
+  file: File,
+  options?: { allowRecipientSave?: boolean }
+): Promise<GroupServiceResult<GroupMessageMedia>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  // 1. Client-side file validation
+  const validation = validateMediaFile(file);
+  if (!validation.isValid || !validation.mediaType || !validation.cleanFilename) {
+    return { data: null, error: validation.error || 'Invalid media file.' };
+  }
+
+  try {
+    // 2. Build Storage Path: groups/${groupId}/${uniqueId}-${cleanFilename}
+    const uniqueId = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const storagePath = `groups/${groupId}/${uniqueId}-${validation.cleanFilename}`;
+
+    // 3. Upload to Private 'conversation-media' Bucket
+    const { error: uploadError } = await supabase.storage
+      .from('conversation-media')
+      .upload(storagePath, file, {
+        cacheControl: 'no-cache, no-store, must-revalidate',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('[GroupsService] Media upload failed:', uploadError);
+      return { 
+        data: null, 
+        error: uploadError.message || 'Failed to upload media to secure storage.' 
+      };
+    }
+
+    // 4. Register Media Asset via Server RPC
+    const allowSave = options?.allowRecipientSave !== false;
+    const createRes = await createGroupMediaAsset(
+      groupId,
+      storagePath,
+      validation.mediaType,
+      file.type,
+      file.size,
+      validation.cleanFilename,
+      allowSave
+    );
+
+    if (createRes.error || !createRes.data) {
+      return { data: null, error: createRes.error || 'Failed to register group media asset' };
+    }
+
+    return { data: createRes.data, error: null };
+  } catch (err: any) {
+    return { data: null, error: err?.message || 'Group media upload failed.' };
+  }
+}
+
+/**
+ * Saves a group media asset, converting it from ephemeral (24h) to permanent.
+ * Requires caller to be an active group member and asset.allow_recipient_save = true.
+ */
+export async function saveGroupMediaAsset(
+  mediaAssetId: string,
+  groupId: string,
+  userId: string
+): Promise<GroupServiceResult<GroupMessageMedia>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('save_media_asset', {
+      p_media_asset_id: mediaAssetId,
+    });
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    emitGroupEvent('group:media_saved', groupId, { mediaAssetId, userId, asset: data });
+    return { data: data as GroupMessageMedia, error: null };
+  } catch (err: any) {
+    return { data: null, error: err?.message || 'Failed to save group media asset.' };
   }
 }

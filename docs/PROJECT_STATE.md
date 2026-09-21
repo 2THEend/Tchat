@@ -13,22 +13,18 @@
 
 ## Current Stage
 
-**Calls — Phase 1: Core Schema + Immediate Call Requests Implemented, Migrated & Verified.**
-- Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) are active with clean mobile-first ergonomics (`max-w-md` shell).
-- Full Supabase backend schemas for Auth, Identity, Connections, Blocks, Conversations, Ephemeral Media, Streaks, and Calls are applied on the remote Supabase instance (`jqghykhnnrfsjkkjhekf`).
-- Calls Domain — Phase 1 Core Schema & Immediate Call Requests:
-  - Tables `calls` and `call_sessions` created with RLS and active on Supabase.
-  - Race-safe PostgreSQL RPCs active: `create_call_request`, `respond_to_call`, `cancel_call`, `get_conversation_calls`, `get_active_call_for_conversation`.
-  - Invariants strictly enforced: mandatory context/reason (presets or custom note 2..300 chars), connection-only validation, bidirectional block checks, caller identity verification (`auth.uid()`).
-  - Auto-cancellation triggers active: `trg_connection_deleted_calls` (cancels pending calls when connection deleted/unfriended) and `trg_block_created_calls` (cancels pending calls when either user blocks the other).
-  - Provisional expiration duration enforced (provisional default 120 seconds).
-  - WebRTC, microphone capture, audio streams, and scheduled calls intentionally excluded from Phase 1.
-- Minimal Contextual UI Layer:
-  - `ConversationHeader`: Contextual phone action button with subtle active-call indicator.
-  - `CallRequestModal`: Contextual bottom sheet/modal to select preset reason or custom note, explaining immediate call agreement.
-  - `PendingCallBanner`: In-conversation banner displaying countdown timer, reason, and Accept/Decline (for recipient) or Cancel (for initiator).
-  - Supabase Realtime channel subscription + client event bus (`onCallEvent`) for live synchronization.
-- 81 total automated tests passing across 6 test suites (`connections.test.ts`, `media.test.ts`, `lifecycle.test.ts`, `streaks.test.ts`, `streaks_ui.test.ts`, `calls.test.ts`).
+**Groups — Phase 6.3: Group Conversation & Ephemeral Media Implemented, Migrated & Verified.**
+- Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) active with clean mobile-first ergonomics (`max-w-md` shell).
+- Group Conversation Experience (`ActiveGroupView`):
+  - Group-specific contextual header: name, avatar/thumbnail, lifetime remaining badge (`1d left`, etc.), member count badge with modal launcher, role pill (Admin, Mod, Special, Member), and pending join-request review banner for Admins/Mods.
+  - Chronological message stream with sender avatar, display name, handle, role badge, timestamp, and consecutive grouping.
+  - Full ephemeral media support: photos, videos, audio, documents with 24-hour expiration indicators (`Clock` countdown), full-screen viewer modal, recipient save action (`Bookmark`), and sender restriction indicators (`Lock`).
+  - Lifecycle-aware composer (`GroupMessageComposer`): disabled when group is `read_only`, `expired`, or `deleted`.
+  - Supabase Realtime channel integration with reconnect resync catchup and forward-only monotonic read marker tracking.
+- Database & RPC enhancements:
+  - Updated `save_media_asset` RPC to support group media assets with group membership validation and active/read_only lifecycle authorization.
+  - Group media upload and storage path integration: `groups/{groupId}/{assetId}-{filename}` in `conversation-media` bucket.
+- 10 automated end-to-end checks verified passing in `test/group_conversation_phase6_3.test.ts`.
 - Production build and TypeScript linting clean with 0 errors.
 
 ---
@@ -142,6 +138,17 @@ These conceptual distinctions must **NEVER** be collapsed:
       - Human-readable error formatting via `formatGroupError` preventing raw Postgres/Supabase traces from showing in the UI.
       - Fixed atomic succession order in `leave_group` so old admin departs before new admin is promoted, cleanly satisfying the `idx_group_members_unique_admin` constraint.
     - Automated tests: `test/groups_entry_membership_ui_flow.test.ts` (7 suites) and `test/groups_membership.test.ts` (14 suites) passing cleanly.
+  - **Phase 6.3: Group Conversation & Ephemeral Media**:
+    - Complete conversation experience in `ActiveGroupView`:
+      - Contextual header with group avatar/cover, lifetime expiration, member count button with modal launcher, role badge (Admin, Mod, Special, Member), and pending join-request banner for Admins/Mods.
+      - Chronological message stream with sender avatar, name, handle, role, timestamp, and consecutive message grouping.
+      - Ephemeral group media bubbles (`GroupMediaBubble`) with independent 24-hour expiration calculation, formatted time remaining (`formatMediaTimeRemaining`), recipient save action (`saveGroupMediaAsset`), and sender-controlled save restrictions.
+      - Media viewer modal for expanded full-screen preview.
+      - Lifecycle-aware composer (`GroupMessageComposer`) with 2000-character counter, ephemeral media file picker, and automatic read-only disabling for non-active/expired groups.
+    - Database & RPC enhancements:
+      - Updated `public.save_media_asset` RPC with dual authorization: works for both 1:1 conversations and group members in active/read-only groups.
+      - Group media storage path isolation (`groups/{groupId}/{assetId}-{filename}`) using the `conversation-media` bucket.
+    - Automated tests: `test/group_conversation_phase6_3.test.ts` (10 suites) and `test/groups_messaging.test.ts` (9 suites) passing with 100% success.
 - **UI Organization & Coherence Pass**:
   - Navigation architecture: "Permanent navigation is for places (`Home`, `Feed`, `Profile`). Contextual navigation is for things happening (`Connections`, `Conversation`)."
   - `Home`: Standardized "Today" header with day/date hierarchy, unread badge indicators, connection alerts banner, and filtered Today's conversations list.
