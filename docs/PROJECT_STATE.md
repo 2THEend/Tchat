@@ -13,19 +13,17 @@
 
 ## Current Stage
 
-**Groups — Phase 6.3: Group Conversation & Ephemeral Media Implemented, Migrated & Verified.**
-- Core client foundations (React 18, TypeScript, Vite, Tailwind CSS v4) active with clean mobile-first ergonomics (`max-w-md` shell).
-- Group Conversation Experience (`ActiveGroupView`):
-  - Group-specific contextual header: name, avatar/thumbnail, lifetime remaining badge (`1d left`, etc.), member count badge with modal launcher, role pill (Admin, Mod, Special, Member), and pending join-request review banner for Admins/Mods.
-  - Chronological message stream with sender avatar, display name, handle, role badge, timestamp, and consecutive grouping.
-  - Full ephemeral media support: photos, videos, audio, documents with 24-hour expiration indicators (`Clock` countdown), full-screen viewer modal, recipient save action (`Bookmark`), and sender restriction indicators (`Lock`).
-  - Lifecycle-aware composer (`GroupMessageComposer`): disabled when group is `read_only`, `expired`, or `deleted`.
-  - Supabase Realtime channel integration with reconnect resync catchup and forward-only monotonic read marker tracking.
-- Database & RPC enhancements:
-  - Updated `save_media_asset` RPC to support group media assets with group membership validation and active/read_only lifecycle authorization.
-  - Group media upload and storage path integration: `groups/{groupId}/{assetId}-{filename}` in `conversation-media` bucket.
+**Groups — Phase 6.3 Checkpoint Fix: Group Media RLS Resolved & Verified.**
+- Resolved Group Media storage and database RLS failure (`42501: new row violates row-level security policy`).
+- Root causes addressed:
+  1. `storage.objects` INSERT policy evaluated `(storage.foldername(name))[2]` inside `EXISTS (SELECT 1 FROM public.groups g ...)`. PostgreSQL resolved `name` to `groups.name` (`g.name`), returning `NULL` and rejecting valid group uploads. Corrected to explicitly qualify table `objects.name`.
+  2. `storage.objects` SELECT policy required an existing `media_assets` row, but during client upload (`supabase.storage.from(...).upload`), Supabase Storage executes `INSERT ... RETURNING *`. Because `media_assets` registration occurs after file upload, evaluating SELECT policies on the new row failed unless `owner = auth.uid()` was permitted for active members.
+  3. Extended `public.media_assets` INSERT and UPDATE policies to authoritatively validate group membership, unbanned status, and active group lifecycle for `group_id` media.
+  4. Extended `public.save_media_asset` RPC to support group media assets with server-side authorization.
+- Added comprehensive migration `supabase/migrations/20260918120000_fix_group_media_rls.sql`.
+- 9 automated regression tests passing in `test/group_media_rls_regression.test.ts`.
 - 10 automated end-to-end checks verified passing in `test/group_conversation_phase6_3.test.ts`.
-- Production build and TypeScript linting clean with 0 errors.
+- Build and TypeScript checks clean with 0 errors.
 
 ---
 
