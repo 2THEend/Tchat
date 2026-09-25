@@ -12,6 +12,7 @@ import {
   GroupMessageType,
   GroupRole,
   GroupServiceResult,
+  GroupLifecycleStatus,
   TchatGroup,
   TchatGroupJoinRequest,
   TchatGroupMember,
@@ -561,6 +562,8 @@ export async function checkGroupBanStatus(
 
 /**
  * Fetches all groups where the specified user is an active member.
+ * Authoritatively handles active and closing read-only grace groups,
+ * while excluding fully deleted groups.
  */
 export async function getUserActiveGroups(
   userId: string
@@ -570,6 +573,13 @@ export async function getUserActiveGroups(
   }
 
   try {
+    // Proactively sweep lifecycle state in the database
+    try {
+      await supabase.rpc('sweep_groups_lifecycle', { p_limit: 50 });
+    } catch {
+      // Ignore background sweep failure
+    }
+
     const { data, error } = await supabase
       .from('group_members')
       .select(`
@@ -601,14 +611,32 @@ export async function getUserActiveGroups(
       return { data: null, error: error.message };
     }
 
+    const nowMs = Date.now();
     const items: UserActiveGroupItem[] = (data || [])
-      .filter((row: any) => row.group && row.group.lifecycle_status === 'active')
-      .map((row: any) => ({
-        group_id: row.group_id,
-        role: row.role as GroupRole,
-        joined_at: row.joined_at,
-        group: row.group as TchatGroup,
-      }));
+      .filter((row: any) => {
+        if (!row.group) return false;
+        // Completely exclude deleted or past grace groups
+        if (row.group.lifecycle_status === 'deleted') return false;
+        const graceMs = new Date(row.group.grace_expires_at).getTime();
+        if (nowMs >= graceMs) return false;
+        return true;
+      })
+      .map((row: any) => {
+        const expiresMs = new Date(row.group.expires_at).getTime();
+        const effectiveStatus: GroupLifecycleStatus = 
+          row.group.lifecycle_status === 'deleted' ? 'deleted' :
+          (nowMs >= expiresMs || row.group.lifecycle_status === 'read_only') ? 'read_only' : 'active';
+
+        return {
+          group_id: row.group_id,
+          role: row.role as GroupRole,
+          joined_at: row.joined_at,
+          group: {
+            ...row.group,
+            lifecycle_status: effectiveStatus,
+          } as TchatGroup,
+        };
+      });
 
     return { data: items, error: null };
   } catch (err: any) {
@@ -618,6 +646,7 @@ export async function getUserActiveGroups(
 
 /**
  * Fetches active discoverable groups for discovery/joining.
+ * Only returns active, unexpired groups.
  */
 export async function getDiscoverableGroups(
   limit: number = 20
@@ -627,6 +656,13 @@ export async function getDiscoverableGroups(
   }
 
   try {
+    // Proactively sweep lifecycle state in the database
+    try {
+      await supabase.rpc('sweep_groups_lifecycle', { p_limit: 50 });
+    } catch {
+      // Ignore background sweep failure
+    }
+
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from('groups')

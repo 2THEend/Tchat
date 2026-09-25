@@ -36,40 +36,54 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-function query(sql: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify({ query: sql });
-    const req = https.request(
-      {
-        hostname: 'api.supabase.com',
-        path: `/v1/projects/${projectRef}/database/query`,
-        method: 'POST',
-        timeout: 15000,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
+async function query(sql: string, retries = 5): Promise<any> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const result = await new Promise<any>((resolve, reject) => {
+      const payload = JSON.stringify({ query: sql });
+      const req = https.request(
+        {
+          hostname: 'api.supabase.com',
+          path: `/v1/projects/${projectRef}/database/query`,
+          method: 'POST',
+          timeout: 15000,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload),
+          },
         },
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch (e) {
-            resolve(data);
-          }
-        });
-      }
-    );
-    req.on('timeout', () => {
-      req.destroy(new Error('Query timeout'));
+        (res) => {
+          let data = '';
+          res.on('data', (chunk) => (data += chunk));
+          res.on('end', () => {
+            const retryAfter = parseInt(res.headers['retry-after'] as string, 10);
+            try {
+              resolve({ statusCode: res.statusCode, retryAfter, body: JSON.parse(data) });
+            } catch (e) {
+              resolve({ statusCode: res.statusCode, retryAfter, body: data });
+            }
+          });
+        }
+      );
+      req.on('timeout', () => {
+        req.destroy(new Error('Query timeout'));
+      });
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
     });
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
+
+    if (result.statusCode === 429 || result.body?.message?.includes('ThrottlerException')) {
+      if (attempt < retries) {
+        const waitSec = !isNaN(result.retryAfter) && result.retryAfter > 0 ? result.retryAfter + 1 : 5;
+        console.log(`[Rate Limit] Waiting ${waitSec}s for rate limit reset (attempt ${attempt + 1}/${retries})...`);
+        await new Promise((r) => setTimeout(r, waitSec * 1000));
+        continue;
+      }
+    }
+
+    return result.body;
+  }
 }
 
 async function runGroupsMembershipTests() {

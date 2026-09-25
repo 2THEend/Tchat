@@ -552,11 +552,13 @@ async function runTests() {
     console.log('\nCleaning up test artifacts...');
     if (testGroupId) {
       await query(`
+        UPDATE public.groups SET lifecycle_status = 'deleted' WHERE id = '${testGroupId}';
         DELETE FROM public.group_messages WHERE group_id = '${testGroupId}';
         DELETE FROM public.media_assets WHERE group_id = '${testGroupId}';
         DELETE FROM public.group_bans WHERE group_id = '${testGroupId}';
         DELETE FROM public.group_members WHERE group_id = '${testGroupId}';
         DELETE FROM public.groups WHERE id = '${testGroupId}';
+        SET LOCAL storage.allow_delete_query = 'true';
         DELETE FROM storage.objects WHERE bucket_id = 'conversation-media' AND (storage.foldername(name))[1] = 'groups' AND (storage.foldername(name))[2] = '${testGroupId}';
       `);
     }
@@ -565,6 +567,7 @@ async function runTests() {
         DELETE FROM public.messages WHERE conversation_id = '${testConvId}';
         DELETE FROM public.media_assets WHERE conversation_id = '${testConvId}';
         DELETE FROM public.conversations WHERE id = '${testConvId}';
+        SET LOCAL storage.allow_delete_query = 'true';
         DELETE FROM storage.objects WHERE bucket_id = 'conversation-media' AND (storage.foldername(name))[1] = '${testConvId}';
       `);
     }

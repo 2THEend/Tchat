@@ -13,7 +13,8 @@ import {
   Shield,
   Star,
   User as UserIcon,
-  Loader2
+  Loader2,
+  Lock
 } from 'lucide-react';
 import { User } from '@supabase/supabase-js';
 import { TchatProfile, TchatAccount } from '../../domains/identity/types';
@@ -225,10 +226,17 @@ export function HomeAuthenticatedView({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5" />
-                        <span>{lifetimeLabel}</span>
-                      </span>
+                      {grp.lifecycle_status === 'read_only' ? (
+                        <span className="text-[10px] font-mono text-stone-300 bg-stone-800/90 border border-stone-700/80 px-2 py-0.5 rounded-full flex items-center gap-1" title="In closing grace period (read-only)">
+                          <Lock className="w-2.5 h-2.5 text-stone-400" />
+                          <span>Closing</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{lifetimeLabel}</span>
+                        </span>
+                      )}
                       <ArrowRight className="w-3.5 h-3.5 text-stone-500" />
                     </div>
                   </div>

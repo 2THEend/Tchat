@@ -371,6 +371,24 @@ async function runPhase63Tests() {
   } catch (err: any) {
     console.error('\n❌ Phase 6.3 test failure:', err.message);
     process.exit(1);
+  } finally {
+    console.log('\nCleaning up Phase 6.3 test artifacts...');
+    if (testGroupId) {
+      await query(`
+        UPDATE public.groups SET lifecycle_status = 'deleted' WHERE id = '${testGroupId}';
+        DELETE FROM public.group_messages WHERE group_id = '${testGroupId}';
+        DELETE FROM public.media_assets WHERE group_id = '${testGroupId}';
+        DELETE FROM public.group_bans WHERE group_id = '${testGroupId}';
+        DELETE FROM public.group_members WHERE group_id = '${testGroupId}';
+        DELETE FROM public.groups WHERE id = '${testGroupId}';
+      `);
+    }
+    await query(`
+      DELETE FROM public.profiles WHERE id IN ('${uAdmin}', '${uMember}', '${uStranger}', '${uBanned}', '${uLeft}');
+      DELETE FROM public.accounts WHERE id IN ('${uAdmin}', '${uMember}', '${uStranger}', '${uBanned}', '${uLeft}');
+      DELETE FROM auth.users WHERE id IN ('${uAdmin}', '${uMember}', '${uStranger}', '${uBanned}', '${uLeft}');
+    `);
+    console.log('   ✓ Cleanup complete.');
   }
 }
 
