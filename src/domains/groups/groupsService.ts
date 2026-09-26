@@ -615,25 +615,20 @@ export async function getUserActiveGroups(
     const items: UserActiveGroupItem[] = (data || [])
       .filter((row: any) => {
         if (!row.group) return false;
-        // Completely exclude deleted or past grace groups
-        if (row.group.lifecycle_status === 'deleted') return false;
-        const graceMs = new Date(row.group.grace_expires_at).getTime();
-        if (nowMs >= graceMs) return false;
+        // Strictly exclude expired, read-only, or deleted groups from active groups
+        if (row.group.lifecycle_status !== 'active') return false;
+        const expiresMs = new Date(row.group.expires_at).getTime();
+        if (nowMs >= expiresMs) return false;
         return true;
       })
       .map((row: any) => {
-        const expiresMs = new Date(row.group.expires_at).getTime();
-        const effectiveStatus: GroupLifecycleStatus = 
-          row.group.lifecycle_status === 'deleted' ? 'deleted' :
-          (nowMs >= expiresMs || row.group.lifecycle_status === 'read_only') ? 'read_only' : 'active';
-
         return {
           group_id: row.group_id,
           role: row.role as GroupRole,
           joined_at: row.joined_at,
           group: {
             ...row.group,
-            lifecycle_status: effectiveStatus,
+            lifecycle_status: 'active',
           } as TchatGroup,
         };
       });

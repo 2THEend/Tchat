@@ -62,6 +62,11 @@ export function HomeAuthenticatedView({
     day: 'numeric',
   });
 
+  const nowMs = Date.now();
+  const currentActiveGroups = activeGroups.filter(
+    (item) => item.group.lifecycle_status === 'active' && new Date(item.group.expires_at).getTime() > nowMs
+  );
+
   return (
     <div 
       id="home-authenticated-view" 
@@ -120,7 +125,7 @@ export function HomeAuthenticatedView({
       />
 
       {/* 4. Intentional Temporary Groups Section (Isolated from 1:1 Home activity) */}
-      {(onCreateGroup || onFindGroups || activeGroups.length > 0) && (
+      {(onCreateGroup || onFindGroups || currentActiveGroups.length > 0) && (
         <div 
           id="home-groups-context-bar"
           className="p-4 rounded-2xl bg-stone-900/50 border border-stone-800/70 space-y-3"
@@ -174,9 +179,9 @@ export function HomeAuthenticatedView({
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               <span>Loading your active groups...</span>
             </div>
-          ) : activeGroups.length > 0 ? (
+          ) : currentActiveGroups.length > 0 ? (
             <div className="space-y-2 pt-1">
-              {activeGroups.map((item) => {
+              {currentActiveGroups.map((item) => {
                 const grp = item.group;
                 const lifetimeLabel = grp.lifetime === '1_day' 
                   ? '1d' 
@@ -226,17 +231,10 @@ export function HomeAuthenticatedView({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {grp.lifecycle_status === 'read_only' ? (
-                        <span className="text-[10px] font-mono text-stone-300 bg-stone-800/90 border border-stone-700/80 px-2 py-0.5 rounded-full flex items-center gap-1" title="In closing grace period (read-only)">
-                          <Lock className="w-2.5 h-2.5 text-stone-400" />
-                          <span>Closing</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <Clock className="w-2.5 h-2.5" />
-                          <span>{lifetimeLabel}</span>
-                        </span>
-                      )}
+                      <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>{lifetimeLabel}</span>
+                      </span>
                       <ArrowRight className="w-3.5 h-3.5 text-stone-500" />
                     </div>
                   </div>
