@@ -161,3 +161,41 @@ export function formatGroupError(rawError?: string | null, fallback = 'An unexpe
   return rawError.replace(/^[A-Z0-9_]+:\s*/, '').slice(0, 150);
 }
 
+// ------------------------------------------------------------------------------
+// Circles Validation (Phase 6.5)
+// ------------------------------------------------------------------------------
+
+export function validateCircleName(name: string): ValidationResult {
+  if (!name || typeof name !== 'string') {
+    return { isValid: false, error: 'Circle name is required' };
+  }
+  const clean = name.trim();
+  if (clean.length < 1) {
+    return { isValid: false, error: 'Circle name is required' };
+  }
+  if (clean.length > 60) {
+    return { isValid: false, error: 'Circle name cannot exceed 60 characters' };
+  }
+  return { isValid: true };
+}
+
+export function validateCircleReason(reason?: string): ValidationResult {
+  if (!reason || typeof reason !== 'string') return { isValid: true };
+  const clean = reason.trim();
+  if (clean.length > 200) {
+    return { isValid: false, error: 'Circle description cannot exceed 200 characters' };
+  }
+  return { isValid: true };
+}
+
+export function validateCreateCircleInput(input: { name: string; reason?: string }): ValidationResult {
+  const nameRes = validateCircleName(input.name);
+  if (!nameRes.isValid) return nameRes;
+
+  const reasonRes = validateCircleReason(input.reason);
+  if (!reasonRes.isValid) return reasonRes;
+
+  return { isValid: true };
+}
+
+

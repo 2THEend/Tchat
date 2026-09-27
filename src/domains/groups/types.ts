@@ -153,3 +153,60 @@ export interface GroupMessage {
   sender?: GroupMessageSender;
   media?: GroupMessageMedia | null;
 }
+
+// ------------------------------------------------------------------------------
+// Circles Domain Types (Phase 6.5)
+// ------------------------------------------------------------------------------
+
+export type CircleLifecycleStatus = 'active' | 'expired' | 'deleted';
+
+export interface TchatCircle {
+  id: string;
+  group_id: string;
+  name: string;
+  reason: string | null;
+  created_by: string;
+  lifecycle_status: CircleLifecycleStatus;
+  created_at: string;
+  expires_at: string;
+  ended_at: string | null;
+  member_count: number;
+  is_member: boolean;
+  is_creator: boolean;
+  creator?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  };
+}
+
+export interface CircleMember {
+  circle_id: string;
+  user_id: string;
+  joined_at: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+}
+
+export interface CircleMessage {
+  id: string;
+  circle_id: string;
+  sender_id: string;
+  message_type: GroupMessageType;
+  content: string | null;
+  media_asset_id: string | null;
+  sequence_number: number;
+  created_at: string;
+  sender_username?: string;
+  sender_display_name?: string;
+  sender_avatar_url?: string | null;
+  media?: GroupMessageMedia | null;
+}
+
+export interface CreateCircleInput {
+  name: string;
+  reason?: string;
+}
+

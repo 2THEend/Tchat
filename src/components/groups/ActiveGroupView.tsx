@@ -20,6 +20,7 @@ import {
   GroupMessage, 
   GroupMessageMedia, 
   GroupRole, 
+  TchatCircle,
   TchatGroupMember 
 } from '../../domains/groups/types';
 import { GroupMembersModal } from './GroupMembersModal';
@@ -27,6 +28,9 @@ import { GroupJoinRequestsModal } from './GroupJoinRequestsModal';
 import { GroupLeaveModal } from './GroupLeaveModal';
 import { GroupMessageBubble } from './GroupMessageBubble';
 import { GroupMessageComposer } from './GroupMessageComposer';
+import { GroupCirclesContextBar } from './GroupCirclesContextBar';
+import { CreateCircleModal } from './CreateCircleModal';
+import { CircleConversationView } from './CircleConversationView';
 import { 
   getGroupDetails, 
   getGroupJoinRequests, 
@@ -64,6 +68,10 @@ export function ActiveGroupView({
   const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  // Circle states (Phase 6.5)
+  const [selectedCircle, setSelectedCircle] = useState<TchatCircle | null>(null);
+  const [isCreateCircleModalOpen, setIsCreateCircleModalOpen] = useState(false);
 
   // Message stream states
   const [messages, setMessages] = useState<GroupMessage[]>([]);
@@ -383,6 +391,21 @@ export function ActiveGroupView({
     }
   };
 
+  // If viewing a Circle, render CircleConversationView
+  if (selectedCircle) {
+    return (
+      <CircleConversationView
+        circle={selectedCircle}
+        parentGroup={group}
+        currentUserId={currentUserId}
+        onBackToGroup={() => setSelectedCircle(null)}
+        onCircleUpdated={() => {
+          onRefreshGroup();
+        }}
+      />
+    );
+  }
+
   return (
     <div 
       id="active-group-view" 
@@ -485,6 +508,14 @@ export function ActiveGroupView({
           </span>
         </div>
       )}
+
+      {/* Circles Context Bar (Temporary side spaces inside group) */}
+      <GroupCirclesContextBar
+        groupId={group.id}
+        isGroupActive={isGroupActive}
+        onOpenCreateCircle={() => setIsCreateCircleModalOpen(true)}
+        onSelectCircle={(c) => setSelectedCircle(c)}
+      />
 
       {/* 2. Message Stream Container */}
       <div 
@@ -632,6 +663,13 @@ export function ActiveGroupView({
         isOpen={isLeaveModalOpen}
         onClose={() => setIsLeaveModalOpen(false)}
         onLeaveSuccess={onLeaveSuccess}
+      />
+
+      <CreateCircleModal
+        groupId={group.id}
+        isOpen={isCreateCircleModalOpen}
+        onClose={() => setIsCreateCircleModalOpen(false)}
+        onCreated={(newCircle) => setSelectedCircle(newCircle)}
       />
     </div>
   );

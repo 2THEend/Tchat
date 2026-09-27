@@ -18,7 +18,10 @@ export type GroupEventType =
   | 'group:request_cancelled'
   | 'group:message_received'
   | 'group:messages_read'
-  | 'group:media_saved';
+  | 'group:media_saved'
+  | 'group:circle_created'
+  | 'group:circle_ended'
+  | 'group:refreshed';
 
 export interface GroupEvent {
   type: GroupEventType;
