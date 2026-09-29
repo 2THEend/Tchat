@@ -372,6 +372,58 @@ async function runGroupCirclesTests() {
     console.log('   ✓ Ephemeral Circle media created and linked to circle message');
 
     // -------------------------------------------------------------
+    // 10b. Regression: Circle Media RLS Isolation & Save Authorization
+    // -------------------------------------------------------------
+    console.log('10b. Testing Circle Media RLS isolation and save authorization regressions...');
+
+    // 10b.1: Circle member can SELECT circle media
+    const memberSelectMedia = await query(`
+      SET LOCAL ROLE authenticated;
+      SET LOCAL "request.jwt.claim.sub" TO '${uMember1}';
+      SELECT id, circle_id, group_id FROM public.media_assets WHERE id = '${mediaAssetId}'::uuid;
+    `);
+    assert(Array.isArray(memberSelectMedia) && memberSelectMedia.length === 1, 'Circle member must be able to select circle media');
+
+    // 10b.2: Parent Group member NOT in circle CANNOT select circle media
+    const nonCircleGroupMemberSelect = await query(`
+      SET LOCAL ROLE authenticated;
+      SET LOCAL "request.jwt.claim.sub" TO '${uAdmin}';
+      SELECT id, circle_id, group_id FROM public.media_assets WHERE id = '${mediaAssetId}'::uuid;
+    `);
+    assert(Array.isArray(nonCircleGroupMemberSelect) && nonCircleGroupMemberSelect.length === 0, 'Group member outside circle must NOT be able to select circle media');
+
+    // 10b.3: Stranger CANNOT select circle media
+    const strangerSelectMedia = await query(`
+      SET LOCAL ROLE authenticated;
+      SET LOCAL "request.jwt.claim.sub" TO '${uStranger}';
+      SELECT id, circle_id, group_id FROM public.media_assets WHERE id = '${mediaAssetId}'::uuid;
+    `);
+    assert(Array.isArray(strangerSelectMedia) && strangerSelectMedia.length === 0, 'Stranger must NOT be able to select circle media');
+
+    // 10b.4: Parent group member outside circle CANNOT save circle media
+    const nonCircleMemberSave = await query(`
+      SET LOCAL ROLE authenticated;
+      SET LOCAL "request.jwt.claim.sub" TO '${uAdmin}';
+      SELECT public.save_media_asset('${mediaAssetId}'::uuid);
+    `);
+    assert(
+      nonCircleMemberSave?.message?.includes('not an active member of this circle') || nonCircleMemberSave?.message?.includes('Not authorized'),
+      'Group member outside circle must be rejected from saving circle media'
+    );
+
+    // 10b.5: Circle member CAN save circle media
+    const circleMemberSave = await query(`
+      SET LOCAL ROLE authenticated;
+      SET LOCAL "request.jwt.claim.sub" TO '${uMember1}';
+      SELECT public.save_media_asset('${mediaAssetId}'::uuid);
+    `);
+    assert(
+      circleMemberSave[0]?.save_media_asset?.is_saved === true,
+      'Active circle member must be authorized to save circle media'
+    );
+    console.log('   ✓ Circle Media RLS isolation and Save Authorization fully verified');
+
+    // -------------------------------------------------------------
     // 11. Test: Early End by Creator & Non-creator Rejection
     // -------------------------------------------------------------
     console.log('11. Testing early ending authorization (Creator vs non-creator)...');

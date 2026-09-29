@@ -8,6 +8,7 @@ import {
   Bookmark, 
   BookmarkCheck, 
   MoreVertical, 
+  Download,
   Lock, 
   Info, 
   X,
@@ -28,6 +29,7 @@ interface GroupMediaBubbleProps {
   currentUserId: string;
   groupId: string;
   isMine: boolean;
+  context?: 'group' | 'circle';
   onMediaSaved?: (updatedAsset: GroupMessageMedia) => void;
 }
 
@@ -36,6 +38,7 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
   currentUserId,
   groupId,
   isMine,
+  context = 'group',
   onMediaSaved,
 }) => {
   const [assetState, setAssetState] = useState<GroupMessageMedia>(media);
@@ -53,6 +56,11 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
 
   const isExpired = isMediaExpired(assetState.expires_at, assetState.is_saved);
   const canSave = assetState.allow_recipient_save && !assetState.is_saved;
+
+  const isCircle = context === 'circle';
+  const saveLabel = isCircle ? 'Save Media' : 'Save to group';
+  const infoTitle = isCircle ? 'Ephemeral Circle Media' : 'Ephemeral Group Media';
+  const savedToast = isCircle ? 'Saved to circle' : 'Saved to group';
 
   // Retrieve temporary signed URL from Supabase Storage
   useEffect(() => {
@@ -100,7 +108,7 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
       setFeedbackMessage(res.error);
     } else if (res.data) {
       setAssetState(res.data);
-      setFeedbackMessage('Saved to group');
+      setFeedbackMessage(savedToast);
       if (onMediaSaved) onMediaSaved(res.data);
       setTimeout(() => {
         setIsMenuOpen(false);
@@ -124,7 +132,7 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
             [Expired Media]
           </p>
           <p className="text-[11px] text-stone-500 truncate">
-            Ephemeral group media expires after 24 hours
+            {isCircle ? 'Ephemeral circle media expires after 24 hours' : 'Ephemeral group media expires after 24 hours'}
           </p>
         </div>
       </div>
@@ -136,14 +144,14 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
     <>
       <div 
         id={`group-media-asset-${assetState.id}`}
-        className={`relative group rounded-2xl overflow-hidden border transition-all ${
+        className={`relative group rounded-2xl border transition-all ${
           isMine 
             ? 'bg-stone-900/90 border-stone-800/90' 
             : 'bg-stone-900 border-stone-800/80'
         }`}
       >
         {/* Media Content Display */}
-        <div className="relative overflow-hidden max-w-xs sm:max-w-sm">
+        <div className="relative rounded-t-2xl overflow-hidden max-w-xs sm:max-w-sm">
           {isLoadingUrl ? (
             <div className="w-64 h-44 bg-stone-950 flex flex-col items-center justify-center gap-2">
               <div className="w-5 h-5 border-2 border-stone-700 border-t-stone-300 rounded-full animate-spin" />
@@ -156,8 +164,8 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
             >
               <img
                 src={signedUrl}
-                alt={assetState.original_filename || 'Group photo'}
-                className="max-h-72 w-auto object-contain rounded-t-xl select-none"
+                alt={assetState.original_filename || (isCircle ? 'Circle photo' : 'Group photo')}
+                className="max-h-72 w-auto object-contain rounded-t-2xl select-none"
                 referrerPolicy="no-referrer"
                 loading="lazy"
               />
@@ -167,9 +175,52 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
                 </span>
               </div>
             </div>
+          ) : assetState.media_type === 'video' ? (
+            <div className="w-64 sm:w-72 rounded-t-2xl overflow-hidden bg-stone-950 relative group/video">
+              {signedUrl ? (
+                <div className="relative">
+                  <video
+                    src={signedUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full max-h-64 object-contain bg-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(true)}
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-stone-900/80 hover:bg-stone-800 text-stone-200 backdrop-blur-sm opacity-80 group-hover/video:opacity-100 transition-opacity cursor-pointer"
+                    title="Open full view"
+                    aria-label="Open video in full view"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full h-36 flex items-center justify-center bg-stone-900 text-stone-500 text-xs">
+                  Loading video...
+                </div>
+              )}
+            </div>
+          ) : assetState.media_type === 'audio' ? (
+            <div className="w-64 p-3 rounded-t-2xl bg-stone-950">
+              <div className="flex items-center gap-2 mb-2">
+                <Mic className="w-4 h-4 text-stone-400" />
+                <span className="text-xs text-stone-300 truncate font-medium">
+                  {assetState.original_filename || 'Audio Message'}
+                </span>
+              </div>
+              {signedUrl ? (
+                <audio src={signedUrl} controls className="w-full h-8" />
+              ) : (
+                <div className="text-[11px] text-stone-500">Loading audio...</div>
+              )}
+            </div>
           ) : (
-            <div className="p-4 flex items-center gap-3 bg-stone-950">
-              <FileText className="w-6 h-6 text-stone-400" />
+            <div className="w-64 p-3 rounded-t-2xl flex items-center gap-3 bg-stone-950">
+              <div className="w-8 h-8 rounded-lg bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-300 shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-stone-200 truncate">
                   {assetState.original_filename || 'Attachment'}
@@ -180,12 +231,25 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
                   </p>
                 )}
               </div>
+              {signedUrl && (
+                <a
+                  href={signedUrl}
+                  download={assetState.original_filename || 'download'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 transition-colors"
+                  title="Download file"
+                  aria-label="Download attachment"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </a>
+              )}
             </div>
           )}
         </div>
 
         {/* Ephemeral Metadata Footer */}
-        <div className="px-3 py-1.5 flex items-center justify-between gap-2 text-[10px] text-stone-400 bg-stone-950/60 border-t border-stone-800/50">
+        <div className="px-3 py-1.5 flex items-center justify-between gap-2 text-[10px] text-stone-400 bg-stone-950/60 rounded-b-2xl border-t border-stone-800/50">
           <div className="flex items-center gap-1.5 min-w-0">
             {assetState.is_saved ? (
               <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
@@ -207,7 +271,7 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
             )}
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions & Menu */}
           <div className="relative flex items-center gap-1">
             {canSave && (
               <button
@@ -216,7 +280,7 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
                 disabled={isSaving}
                 onClick={handleSave}
                 className="p-1 rounded-md text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors cursor-pointer"
-                title="Save media permanently to group"
+                title={saveLabel}
               >
                 <Bookmark className="w-3.5 h-3.5" />
               </button>
@@ -227,42 +291,63 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
               id={`btn-media-menu-${assetState.id}`}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-1 rounded-md text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition-colors cursor-pointer"
+              title="More options"
             >
               <MoreVertical className="w-3.5 h-3.5" />
             </button>
 
-            {/* Context Menu Dropdown */}
+            {/* Context Menu Dropdown: Positioned above button with transparent backdrop, completely unclipped */}
             {isMenuOpen && (
-              <div 
-                id={`group-media-menu-${assetState.id}`}
-                className="absolute right-0 bottom-7 w-44 rounded-xl bg-stone-900 border border-stone-800 shadow-xl py-1 z-30 animate-in fade-in zoom-in-95"
-              >
-                {canSave && (
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="w-full px-3 py-2 text-left text-xs text-stone-200 hover:bg-stone-800 flex items-center gap-2 cursor-pointer"
-                  >
-                    <Bookmark className="w-3.5 h-3.5 text-stone-400" />
-                    <span>{isSaving ? 'Saving...' : 'Save to group'}</span>
-                  </button>
-                )}
+              <>
+                <div 
+                  className="fixed inset-0 z-30" 
+                  onClick={() => setIsMenuOpen(false)} 
+                />
+                <div 
+                  id={`group-media-menu-${assetState.id}`}
+                  className="absolute right-0 bottom-full mb-1.5 w-48 rounded-xl bg-stone-900 border border-stone-800 shadow-2xl py-1 z-40 animate-in fade-in zoom-in-95"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {canSave && (
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="w-full px-3 py-2 text-left text-xs text-stone-200 hover:bg-stone-800 flex items-center gap-2 cursor-pointer transition-colors"
+                    >
+                      <Bookmark className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                      <span className="truncate">{isSaving ? 'Saving...' : saveLabel}</span>
+                    </button>
+                  )}
 
-                <div className="px-3 py-1.5 text-[10px] text-stone-500 border-t border-stone-800 flex flex-col gap-0.5">
-                  <div className="flex items-center gap-1">
-                    <Info className="w-3 h-3 text-stone-500" />
-                    <span>Ephemeral Group Media</span>
+                  {signedUrl && (
+                    <a
+                      href={signedUrl}
+                      download={assetState.original_filename || 'download'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full px-3 py-2 text-left text-xs text-stone-200 hover:bg-stone-800 flex items-center gap-2 cursor-pointer transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                      <span>Download</span>
+                    </a>
+                  )}
+
+                  <div className="px-3 py-1.5 text-[10px] text-stone-500 border-t border-stone-800 flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1">
+                      <Info className="w-3 h-3 text-stone-500 shrink-0" />
+                      <span className="truncate">{infoTitle}</span>
+                    </div>
+                    <span>Expires 24h after send</span>
                   </div>
-                  <span>Expires 24h after send</span>
+
+                  {feedbackMessage && (
+                    <div className="px-3 py-1 text-[10px] text-emerald-400 bg-emerald-950/40 border-t border-emerald-900/50">
+                      {feedbackMessage}
+                    </div>
+                  )}
                 </div>
-
-                {feedbackMessage && (
-                  <div className="px-3 py-1 text-[10px] text-emerald-400 bg-emerald-950/40 border-t border-emerald-900/50">
-                    {feedbackMessage}
-                  </div>
-                )}
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -272,7 +357,7 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
       {isModalOpen && signedUrl && (
         <div 
           id={`group-media-modal-${assetState.id}`}
-          className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in"
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in"
           onClick={() => setIsModalOpen(false)}
         >
           {/* Header controls */}
@@ -280,61 +365,85 @@ export const GroupMediaBubble: React.FC<GroupMediaBubbleProps> = ({
             className="absolute top-4 left-4 right-4 flex items-center justify-between text-stone-300 z-10"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-stone-400 font-medium">
-                {assetState.original_filename || 'Group Media'}
+            <div className="flex items-center gap-2 min-w-0 pr-4">
+              <span className="text-xs text-stone-300 font-medium truncate">
+                {assetState.original_filename || (isCircle ? 'Circle Media' : 'Group Media')}
               </span>
-              <span className="text-xs text-stone-600">•</span>
-              <span className="text-xs text-stone-400">
+              <span className="text-xs text-stone-600 shrink-0">•</span>
+              <span className="text-xs text-stone-400 shrink-0">
                 {assetState.is_saved ? 'Saved' : formatMediaTimeRemaining(assetState.expires_at, assetState.is_saved)}
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsRotated(!isRotated)}
-                className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 text-stone-300 border border-stone-800 transition-colors"
-                title="Rotate image"
-              >
-                <RotateCw className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {assetState.media_type === 'image' && (
+                <button
+                  type="button"
+                  onClick={() => setIsRotated(!isRotated)}
+                  className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 text-stone-300 border border-stone-800 transition-colors cursor-pointer"
+                  title="Rotate image"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+              )}
 
               {canSave && (
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium border border-stone-700 flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium border border-stone-700 flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Bookmark className="w-3.5 h-3.5" />
                   <span>{isSaving ? 'Saving...' : 'Save'}</span>
                 </button>
               )}
 
+              <a
+                href={signedUrl}
+                download={assetState.original_filename || 'download'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 text-stone-300 border border-stone-800 transition-colors cursor-pointer"
+                title="Download"
+              >
+                <Download className="w-4 h-4" />
+              </a>
+
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 text-stone-300 border border-stone-800 transition-colors"
+                className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 text-stone-300 border border-stone-800 transition-colors cursor-pointer"
+                title="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Centered Image */}
+          {/* Centered Media (Image or Video) */}
           <div 
             className="max-w-full max-h-full p-2 flex items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <img
-              src={signedUrl}
-              alt={assetState.original_filename || 'Group photo preview'}
-              className={`max-h-[85vh] max-w-[90vw] object-contain rounded-lg transition-transform duration-200 select-none ${
-                isRotated ? 'rotate-90' : ''
-              }`}
-              referrerPolicy="no-referrer"
-            />
+            {assetState.media_type === 'video' ? (
+              <video
+                src={signedUrl}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+              />
+            ) : (
+              <img
+                src={signedUrl}
+                alt={assetState.original_filename || 'Media preview'}
+                className={`max-h-[85vh] max-w-[90vw] object-contain rounded-lg transition-transform duration-200 select-none shadow-2xl ${
+                  isRotated ? 'rotate-90' : ''
+                }`}
+                referrerPolicy="no-referrer"
+              />
+            )}
           </div>
         </div>
       )}
