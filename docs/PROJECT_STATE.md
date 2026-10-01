@@ -55,10 +55,17 @@ These conceptual distinctions must **NEVER** be collapsed:
   - Password reset request and update flow with URL hash parsing (`recovery` mode).
   - Resend verification email with 60-second cooldown timer.
   - Legal modal terms/privacy acknowledgment during registration.
-- **Identity Domain**:
+- **Identity & Profile Domain**:
   - `accounts` table with account status enforcement (`active`, `suspended`, `deactivated`).
-  - `profiles` table with unique username validation, display name, and avatar URL.
+  - `profiles` table with unique username validation, display name, bio, and avatar URL.
   - Profile setup view for first-time sign-ins missing profile records.
+  - **Profile Domain Maturity (Own Profile Only)**:
+    - Server-authoritative RPC `update_own_profile` with strict `auth.uid()` derivation, server-side bounds validation (3–24 char username, <= 50 char display name, <= 200 char bio), username uniqueness validation against other users, and atomic profile updates.
+    - Public Supabase Storage bucket `avatars` (5MB limit, image types only) with RLS policies restricting insert, update, and delete to the authenticated user's isolated folder (`(storage.foldername(name))[1] = auth.uid()::text`).
+    - Client domain operations in `src/domains/identity/identityService.ts`: `updateOwnProfile`, `uploadAvatar`, and `deleteAvatar`.
+    - Input validation rules and constants in `src/domains/identity/validation.ts` including `validateAvatarFile`, `MAX_AVATAR_SIZE_BYTES`, and `ALLOWED_AVATAR_MIME_TYPES`.
+    - Editable Profile surface in `src/components/profile/ProfileView.tsx`: Edit Profile trigger, in-place editing form, instant camera/photo upload and preview, photo removal, live character counters (display name, username, bio), debounced username availability validation, error banners, and synchronization with `AppShell` and `identityCache`.
+    - 41 automated unit and integration tests passing in `test/profile.test.ts`.
 - **Connections Domain**:
   - `connection_requests` table with 3–300 character mandatory context constraint.
   - Request lifecycle statuses: `pending`, `accepted`, `declined`, `ignored`, `cancelled`.

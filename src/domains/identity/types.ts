@@ -24,6 +24,13 @@ export interface IdentitySetupInput {
   bio?: string;
 }
 
+export interface UpdateProfileInput {
+  username: string;
+  display_name?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+}
+
 export interface IdentityStatus {
   isChecking: boolean;
   hasProfile: boolean;

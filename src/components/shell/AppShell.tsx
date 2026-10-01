@@ -816,6 +816,12 @@ export function AppShell() {
               onOpenConnections={() => setIsViewingConnections(true)}
               onSignOut={handleSignOut}
               isSigningOut={isSigningOut}
+              onProfileUpdated={(updatedProfile) => {
+                setProfile(updatedProfile);
+                if (account) {
+                  saveCachedIdentity(user.id, updatedProfile, account, account.email);
+                }
+              }}
             />
           ) : null}
         </section>

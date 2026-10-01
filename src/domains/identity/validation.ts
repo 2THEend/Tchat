@@ -67,3 +67,35 @@ export function validateBio(bio?: string | null): ValidationResult {
   }
   return { isValid: true };
 }
+
+export const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+export const ALLOWED_AVATAR_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+];
+
+export function validateAvatarFile(file?: { size: number; type: string } | null): ValidationResult {
+  if (!file) {
+    return { isValid: false, error: 'No image file provided.' };
+  }
+
+  if (file.size <= 0) {
+    return { isValid: false, error: 'Avatar file cannot be empty.' };
+  }
+
+  if (file.size > MAX_AVATAR_SIZE_BYTES) {
+    return { isValid: false, error: 'Avatar image must be under 5MB.' };
+  }
+
+  if (!ALLOWED_AVATAR_MIME_TYPES.includes(file.type.toLowerCase())) {
+    return { 
+      isValid: false, 
+      error: 'Invalid image format. Allowed formats: JPG, PNG, WebP, GIF.' 
+    };
+  }
+
+  return { isValid: true };
+}
+

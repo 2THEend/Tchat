@@ -10,13 +10,15 @@ import {
   TchatProfile, 
   TchatAccount, 
   IdentitySetupInput, 
-  IdentityStatus 
+  IdentityStatus,
+  UpdateProfileInput 
 } from './types';
 import { 
   validateUsername, 
   validateDisplayName, 
   validateBio, 
-  normalizeUsername 
+  normalizeUsername,
+  validateAvatarFile 
 } from './validation';
 
 export async function checkIdentity(userId: string): Promise<IdentityStatus> {
@@ -263,4 +265,188 @@ export async function updateUsername(
     return { success: false, error: message };
   }
 }
+
+/**
+ * Updates the authenticated user's own profile.
+ * 
+ * Uses server-side RPC update_own_profile which derives user identity
+ * authoritatively from auth.uid(). Validates fields, enforces username
+ * format and uniqueness, and preserves account/profile consistency.
+ */
+export async function updateOwnProfile(
+  input: UpdateProfileInput
+): Promise<{ success: boolean; profile?: TchatProfile; error?: string }> {
+  if (!supabase) {
+    return { success: false, error: 'Supabase client is not ready.' };
+  }
+
+  // 1. Client-side input validation
+  const usernameVal = validateUsername(input.username);
+  if (!usernameVal.isValid || !usernameVal.normalized) {
+    return { success: false, error: usernameVal.error };
+  }
+
+  const nameVal = validateDisplayName(input.display_name);
+  if (!nameVal.isValid) {
+    return { success: false, error: nameVal.error };
+  }
+
+  const bioVal = validateBio(input.bio);
+  if (!bioVal.isValid) {
+    return { success: false, error: bioVal.error };
+  }
+
+  const cleanDisplayName = input.display_name?.trim() || null;
+  const cleanBio = input.bio?.trim() || null;
+  const cleanAvatarUrl = input.avatar_url?.trim() || null;
+
+  try {
+    // 2. Primary: Invoke server-authoritative RPC
+    const { data: rpcData, error: rpcError } = await supabase.rpc('update_own_profile', {
+      p_username: input.username.trim(),
+      p_display_name: cleanDisplayName,
+      p_bio: cleanBio,
+      p_avatar_url: cleanAvatarUrl,
+    });
+
+    if (!rpcError && rpcData) {
+      return { success: true, profile: rpcData as TchatProfile };
+    }
+
+    if (rpcError) {
+      // Check for uniqueness conflict
+      if (rpcError.message.includes('already taken') || rpcError.code === '23505') {
+        return { 
+          success: false, 
+          error: `The username "@${input.username.trim()}" is already taken. Please choose another.` 
+        };
+      }
+
+      // If function doesn't exist yet, fallback to direct RLS update
+      if (!rpcError.message.includes('does not exist') && !rpcError.message.includes('function')) {
+        return { success: false, error: rpcError.message };
+      }
+    }
+
+    // 3. Fallback: Direct RLS update using session auth.uid()
+    const { data: sessionData } = await supabase.auth.getSession();
+    const currentUserId = sessionData?.session?.user?.id;
+    if (!currentUserId) {
+      return { success: false, error: 'User is not authenticated.' };
+    }
+
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        username: input.username.trim(),
+        normalized_username: usernameVal.normalized,
+        display_name: cleanDisplayName,
+        bio: cleanBio,
+        avatar_url: cleanAvatarUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', currentUserId)
+      .select('*')
+      .single();
+
+    if (updateError) {
+      if (updateError.code === '23505' || updateError.message.includes('unique') || updateError.message.includes('already taken')) {
+        return { 
+          success: false, 
+          error: `The username "@${input.username.trim()}" is already taken.` 
+        };
+      }
+      return { success: false, error: updateError.message };
+    }
+
+    return { success: true, profile: updatedProfile as TchatProfile };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to update profile.';
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Uploads a profile avatar image to the public 'avatars' storage bucket.
+ * 
+ * Enforces image validation (<= 5MB, jpeg/png/webp/gif) and stores the file
+ * under an isolated user path: `${userId}/avatar-${timestamp}.${ext}`.
+ */
+export async function uploadAvatar(
+  file: File,
+  userId: string
+): Promise<{ success: boolean; publicUrl?: string; error?: string }> {
+  if (!supabase) {
+    return { success: false, error: 'Supabase client is not ready.' };
+  }
+
+  // 1. Client validation
+  const validation = validateAvatarFile(file);
+  if (!validation.isValid) {
+    return { success: false, error: validation.error };
+  }
+
+  try {
+    // 2. Derive file extension safely
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const cleanExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext) ? ext : 'jpg';
+    const filePath = `${userId}/avatar-${Date.now()}.${cleanExt}`;
+
+    // 3. Upload to 'avatars' bucket
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return { success: false, error: uploadError.message };
+    }
+
+    // 4. Retrieve permanent public URL
+    const { data: publicData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    if (!publicData || !publicData.publicUrl) {
+      return { success: false, error: 'Failed to retrieve avatar public URL.' };
+    }
+
+    return { success: true, publicUrl: publicData.publicUrl };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to upload avatar image.';
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Removes an existing avatar from storage if it is hosted in the avatars bucket.
+ */
+export async function deleteAvatar(
+  avatarUrl: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase || !avatarUrl) {
+    return { success: true };
+  }
+
+  try {
+    // Check if the avatar is hosted on our Supabase avatars storage
+    const avatarBucketToken = '/storage/v1/object/public/avatars/';
+    const index = avatarUrl.indexOf(avatarBucketToken);
+    if (index !== -1) {
+      const relativePath = decodeURIComponent(avatarUrl.slice(index + avatarBucketToken.length));
+      // Only delete if it belongs to this user
+      if (relativePath.startsWith(`${userId}/`)) {
+        await supabase.storage.from('avatars').remove([relativePath]);
+      }
+    }
+    return { success: true };
+  } catch {
+    // Failing to delete old file should not block profile save
+    return { success: true };
+  }
+}
+
 
