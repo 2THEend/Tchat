@@ -37,6 +37,7 @@ import {
 } from '../../domains/groups/realtime';
 import { CircleMembersModal } from './CircleMembersModal';
 import { GroupMediaBubble } from './GroupMediaBubble';
+import { OtherUserProfileModal } from '../profile/OtherUserProfileModal';
 
 interface CircleConversationViewProps {
   circle: TchatCircle;
@@ -66,6 +67,9 @@ export function CircleConversationView({
   // In-app Confirmation Modals (Replacing browser-native window.confirm)
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isEndModalOpen, setIsEndModalOpen] = useState(false);
+
+  // Profile modal state
+  const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
 
   // Message input state
   const [inputText, setInputText] = useState('');
@@ -453,9 +457,14 @@ export function CircleConversationView({
                 className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}
               >
                 {!isMe && (
-                  <span className="text-[10px] text-stone-500 px-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewingProfileUserId(msg.sender_id)}
+                    className="text-[10px] text-stone-500 hover:text-stone-300 px-1 text-left cursor-pointer transition-colors"
+                    title={`View ${msg.sender_display_name || msg.sender_username || 'Member'}'s profile`}
+                  >
                     {msg.sender_display_name || msg.sender_username || 'Member'}
-                  </span>
+                  </button>
                 )}
 
                 {/* Message Bubble Container: Clean, unpadded media + neutral text bubble */}
@@ -577,6 +586,7 @@ export function CircleConversationView({
           circleName={circle.name}
           isOpen={isMembersModalOpen}
           onClose={() => setIsMembersModalOpen(false)}
+          onOpenProfile={setViewingProfileUserId}
         />
       )}
 
@@ -712,6 +722,14 @@ export function CircleConversationView({
           </div>
         </div>
       )}
+
+      {/* Other User Profile Modal */}
+      <OtherUserProfileModal
+        targetUserId={viewingProfileUserId}
+        currentUserId={currentUserId}
+        isOpen={Boolean(viewingProfileUserId)}
+        onClose={() => setViewingProfileUserId(null)}
+      />
     </div>
   );
 }

@@ -36,6 +36,7 @@ import { IncomingRequestsList } from './IncomingRequestsList';
 import { SentRequestsList } from './SentRequestsList';
 import { FindPeople } from './FindPeople';
 import { BlockedUsersList } from './BlockedUsersList';
+import { OtherUserProfileModal } from '../profile/OtherUserProfileModal';
 
 interface ConnectionsViewProps {
   currentUserId: string;
@@ -60,6 +61,7 @@ export function ConnectionsView({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSendingRequest, setIsSendingRequest] = useState<boolean>(false);
   const [isSchemaPending, setIsSchemaPending] = useState<boolean>(false);
+  const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadData = useCallback(async () => {
@@ -363,6 +365,7 @@ export function ConnectionsView({
             onBlock={handleBlock}
             isLoading={isLoading}
             onOpenConversation={onOpenConversation}
+            onOpenProfile={setViewingProfileUserId}
           />
         )}
 
@@ -373,6 +376,7 @@ export function ConnectionsView({
             onDecline={handleDeclineRequest}
             onIgnore={handleIgnoreRequest}
             isLoading={isLoading}
+            onOpenProfile={setViewingProfileUserId}
           />
         )}
 
@@ -381,6 +385,7 @@ export function ConnectionsView({
             currentUserId={currentUserId}
             onSendRequest={handleSendRequest}
             isSendingRequest={isSendingRequest}
+            onOpenProfile={setViewingProfileUserId}
           />
         )}
 
@@ -389,6 +394,7 @@ export function ConnectionsView({
             requests={sent}
             onCancel={handleCancelSentRequest}
             isLoading={isLoading}
+            onOpenProfile={setViewingProfileUserId}
           />
         )}
 
@@ -400,6 +406,16 @@ export function ConnectionsView({
           />
         )}
       </div>
+
+      {/* Other User Profile Modal */}
+      <OtherUserProfileModal
+        targetUserId={viewingProfileUserId}
+        currentUserId={currentUserId}
+        isOpen={Boolean(viewingProfileUserId)}
+        onClose={() => setViewingProfileUserId(null)}
+        onOpenConversation={onOpenConversation}
+        onRelationshipChange={loadData}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ interface GroupMessageBubbleProps {
   groupId: string;
   showSenderHeader: boolean;
   onMediaSaved?: (updatedAsset: GroupMessageMedia) => void;
+  onOpenProfile?: (userId: string) => void;
 }
 
 function formatTime(isoString: string): string {
@@ -26,6 +27,7 @@ export const GroupMessageBubble: React.FC<GroupMessageBubbleProps> = ({
   groupId,
   showSenderHeader,
   onMediaSaved,
+  onOpenProfile,
 }) => {
   const isMine = message.sender_id === currentUserId;
   const timeFormatted = formatTime(message.created_at);
@@ -58,7 +60,14 @@ export const GroupMessageBubble: React.FC<GroupMessageBubbleProps> = ({
     >
       {/* Sender Header for Other Members */}
       {!isMine && showSenderHeader && (
-        <div className="flex items-center gap-2 mb-1 pl-1">
+        <button
+          type="button"
+          onClick={() => onOpenProfile?.(message.sender_id)}
+          className={`flex items-center gap-2 mb-1 pl-1 text-left ${
+            onOpenProfile ? 'hover:opacity-80 cursor-pointer transition-opacity' : 'cursor-default'
+          }`}
+          title={onOpenProfile ? `View ${senderName}'s profile` : undefined}
+        >
           {/* Avatar or Initial */}
           <div className="w-5 h-5 rounded-full bg-stone-800 border border-stone-700/60 flex items-center justify-center overflow-hidden shrink-0">
             {message.sender?.avatar_url ? (
@@ -98,7 +107,7 @@ export const GroupMessageBubble: React.FC<GroupMessageBubbleProps> = ({
               <span>Special</span>
             </span>
           )}
-        </div>
+        </button>
       )}
 
       {/* Message Content Container */}

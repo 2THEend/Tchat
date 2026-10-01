@@ -8,6 +8,7 @@ interface CircleMembersModalProps {
   circleName: string;
   isOpen: boolean;
   onClose: () => void;
+  onOpenProfile?: (userId: string) => void;
 }
 
 export function CircleMembersModal({
@@ -15,6 +16,7 @@ export function CircleMembersModal({
   circleName,
   isOpen,
   onClose,
+  onOpenProfile,
 }: CircleMembersModalProps) {
   const [members, setMembers] = useState<CircleMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,9 +83,12 @@ export function CircleMembersModal({
             <p className="text-xs text-stone-500 text-center py-6">No members in this circle yet.</p>
           ) : (
             members.map((m) => (
-              <div 
+              <button 
                 key={m.user_id}
-                className="flex items-center gap-3 p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80"
+                type="button"
+                onClick={() => onOpenProfile?.(m.user_id)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-stone-950/60 hover:bg-stone-950 border border-stone-800/80 text-left transition-colors cursor-pointer"
+                title={`View ${m.display_name}'s profile`}
               >
                 <div className="w-8 h-8 rounded-full bg-stone-800 border border-stone-700 overflow-hidden flex items-center justify-center shrink-0">
                   {m.avatar_url ? (
@@ -105,7 +110,7 @@ export function CircleMembersModal({
                     @{m.username}
                   </div>
                 </div>
-              </div>
+              </button>
             ))
           )}
         </div>

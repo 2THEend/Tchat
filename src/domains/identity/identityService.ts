@@ -11,7 +11,8 @@ import {
   TchatAccount, 
   IdentitySetupInput, 
   IdentityStatus,
-  UpdateProfileInput 
+  UpdateProfileInput,
+  OtherUserProfile 
 } from './types';
 import { 
   validateUsername, 
@@ -448,5 +449,184 @@ export async function deleteAvatar(
     return { success: true };
   }
 }
+
+/**
+ * Retrieves the public profile and authoritative relationship context
+ * for another Tchat user.
+ */
+export async function getOtherUserProfile(
+  targetUserId: string,
+  currentUserId: string
+): Promise<{ data?: OtherUserProfile; error?: string }> {
+  if (!supabase) {
+    return { error: 'Supabase client is not ready.' };
+  }
+
+  try {
+    // 1. Primary: Server-authoritative RPC
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_other_user_profile', {
+      p_target_user_id: targetUserId,
+    });
+
+    if (!rpcError && rpcData) {
+      return { data: rpcData as OtherUserProfile };
+    }
+
+    // If RPC failed due to user not found or inactive account
+    if (rpcError && (rpcError.message.includes('not found') || rpcError.message.includes('not available'))) {
+      return { error: rpcError.message };
+    }
+
+    // 2. Fallback: Query public profile and tables directly
+    const { data: profile, error: profError } = await supabase
+      .from('profiles')
+      .select('id, username, normalized_username, display_name, avatar_url, bio, created_at')
+      .eq('id', targetUserId)
+      .maybeSingle();
+
+    if (profError || !profile) {
+      return { error: profError?.message || 'User profile not found.' };
+    }
+
+    // Self check
+    if (currentUserId === targetUserId) {
+      return {
+        data: {
+          ...profile,
+          relationship: {
+            status: 'self',
+          },
+        },
+      };
+    }
+
+    // Check blocks
+    const { data: blockerRow } = await supabase
+      .from('blocks')
+      .select('id')
+      .eq('blocker_id', currentUserId)
+      .eq('blocked_id', targetUserId)
+      .maybeSingle();
+
+    if (blockerRow) {
+      return {
+        data: {
+          ...profile,
+          relationship: {
+            status: 'blocked',
+          },
+        },
+      };
+    }
+
+    const { data: blockedRow } = await supabase
+      .from('blocks')
+      .select('id')
+      .eq('blocker_id', targetUserId)
+      .eq('blocked_id', currentUserId)
+      .maybeSingle();
+
+    if (blockedRow) {
+      return {
+        data: {
+          ...profile,
+          bio: null, // Redacted
+          relationship: {
+            status: 'viewer_blocked',
+          },
+        },
+      };
+    }
+
+    // Check connection
+    const userLow = currentUserId < targetUserId ? currentUserId : targetUserId;
+    const userHigh = currentUserId < targetUserId ? targetUserId : currentUserId;
+
+    const { data: connection } = await supabase
+      .from('connections')
+      .select('id')
+      .eq('user_a_id', userLow)
+      .eq('user_b_id', userHigh)
+      .maybeSingle();
+
+    if (connection) {
+      // Lookup conversation
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('user_a_id', userLow)
+        .eq('user_b_id', userHigh)
+        .maybeSingle();
+
+      return {
+        data: {
+          ...profile,
+          relationship: {
+            status: 'connected',
+            conversation_id: conv?.id || null,
+          },
+        },
+      };
+    }
+
+    // Check outgoing pending request
+    const { data: sentReq } = await supabase
+      .from('connection_requests')
+      .select('id, context')
+      .eq('sender_id', currentUserId)
+      .eq('recipient_id', targetUserId)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (sentReq) {
+      return {
+        data: {
+          ...profile,
+          relationship: {
+            status: 'request_sent',
+            pending_request_id: sentReq.id,
+            request_context: sentReq.context,
+          },
+        },
+      };
+    }
+
+    // Check incoming pending request
+    const { data: incomingReq } = await supabase
+      .from('connection_requests')
+      .select('id, context')
+      .eq('sender_id', targetUserId)
+      .eq('recipient_id', currentUserId)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (incomingReq) {
+      return {
+        data: {
+          ...profile,
+          relationship: {
+            status: 'request_received',
+            pending_request_id: incomingReq.id,
+            request_context: incomingReq.context,
+          },
+        },
+      };
+    }
+
+    // Otherwise not connected
+    return {
+      data: {
+        ...profile,
+        relationship: {
+          status: 'not_connected',
+        },
+      },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Error fetching user profile.';
+    return { error: message };
+  }
+}
+
 
 

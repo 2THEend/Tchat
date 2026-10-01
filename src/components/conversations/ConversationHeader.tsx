@@ -1,4 +1,4 @@
-import { ArrowLeft, User, RotateCw, Sparkles, Phone } from 'lucide-react';
+import { ArrowLeft, User, RotateCw, Phone } from 'lucide-react';
 import { TchatParticipantProfile } from '../../domains/conversations/types';
 
 interface ConversationHeaderProps {
@@ -6,9 +6,7 @@ interface ConversationHeaderProps {
   onBack: () => void;
   onRefresh: () => void;
   isRefreshing?: boolean;
-  onOpenStreaks?: () => void;
-  activeStreakCount?: number;
-  hasPendingStreak?: boolean;
+  onOpenPartnerProfile?: () => void;
   onOpenCallRequest?: () => void;
   hasActiveCall?: boolean;
 }
@@ -18,9 +16,7 @@ export function ConversationHeader({
   onBack,
   onRefresh,
   isRefreshing = false,
-  onOpenStreaks,
-  activeStreakCount = 0,
-  hasPendingStreak = false,
+  onOpenPartnerProfile,
   onOpenCallRequest,
   hasActiveCall = false,
 }: ConversationHeaderProps) {
@@ -40,7 +36,13 @@ export function ConversationHeader({
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2.5 min-w-0">
+        <button
+          id="btn-conversation-partner-profile"
+          type="button"
+          onClick={onOpenPartnerProfile}
+          className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-85 transition-opacity cursor-pointer"
+          title={`View ${partner.display_name || partner.username}'s profile`}
+        >
           <div className="w-9 h-9 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-300 overflow-hidden shrink-0">
             {partner.avatar_url ? (
               <img
@@ -61,7 +63,7 @@ export function ConversationHeader({
               @{partner.username}
             </p>
           </div>
-        </div>
+        </button>
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
@@ -78,24 +80,6 @@ export function ConversationHeader({
             {hasActiveCall && (
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-stone-950 animate-pulse" />
             )}
-          </button>
-        )}
-
-        {onOpenStreaks && (
-          <button
-            id="btn-header-streaks"
-            type="button"
-            onClick={onOpenStreaks}
-            aria-label="Manage streaks"
-            title="Streaks"
-            className="relative w-9 h-9 rounded-xl flex items-center justify-center text-stone-400 hover:text-stone-200 hover:bg-stone-900 transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4" />
-            {hasPendingStreak ? (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-stone-950" />
-            ) : activeStreakCount > 0 ? (
-              <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-stone-950" />
-            ) : null}
           </button>
         )}
 

@@ -23,9 +23,9 @@ import { ConversationHeader } from './ConversationHeader';
 import { MessageList } from './MessageList';
 import { MessageComposer } from './MessageComposer';
 import { FirstUseMediaSaveTip } from './FirstUseMediaSaveTip';
-import { StreakBadges } from './streaks/StreakBadges';
 import { PendingStreakBanner } from './streaks/PendingStreakBanner';
 import { StreaksModal } from './streaks/StreaksModal';
+import { OtherUserProfileModal } from '../profile/OtherUserProfileModal';
 import { PendingCallBanner } from './calls/PendingCallBanner';
 import { ActiveCallSession } from './calls/ActiveCallSession';
 import { CallRequestModal } from './calls/CallRequestModal';
@@ -47,6 +47,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const [streaks, setStreaks] = useState<TchatStreak[]>([]);
   const [activeCall, setActiveCall] = useState<TchatCall | null>(null);
   const [isStreaksModalOpen, setIsStreaksModalOpen] = useState<boolean>(false);
+  const [isPartnerProfileOpen, setIsPartnerProfileOpen] = useState<boolean>(false);
   const [isCallModalOpen, setIsCallModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -338,18 +339,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         onBack={onBack}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
-        onOpenStreaks={() => setIsStreaksModalOpen(true)}
-        activeStreakCount={streaks.filter((s) => s.state === 'active').length}
-        hasPendingStreak={streaks.some((s) => s.state === 'pending')}
+        onOpenPartnerProfile={() => setIsPartnerProfileOpen(true)}
         onOpenCallRequest={() => setIsCallModalOpen(true)}
         hasActiveCall={!!activeCall && ['pending', 'accepted', 'connecting', 'connected'].includes(activeCall.status)}
-      />
-
-      {/* Streak Continuity Badges */}
-      <StreakBadges
-        streaks={streaks}
-        onOpenModal={() => setIsStreaksModalOpen(true)}
-        hasPending={streaks.some((s) => s.state === 'pending')}
       />
 
       {/* Pending Call Request Banner */}
@@ -452,6 +444,15 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         conversationId={conversationId}
         partnerName={partner.display_name || partner.username}
         onCallRequested={loadActiveCall}
+      />
+
+      {/* Other User Profile Modal */}
+      <OtherUserProfileModal
+        targetUserId={partner.id}
+        currentUserId={currentUserId}
+        isOpen={isPartnerProfileOpen}
+        onClose={() => setIsPartnerProfileOpen(false)}
+        onRelationshipChange={loadStreaks}
       />
     </div>
   );

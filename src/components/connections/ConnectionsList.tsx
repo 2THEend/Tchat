@@ -8,6 +8,7 @@ interface ConnectionsListProps {
   onBlock: (targetUserId: string) => Promise<void>;
   isLoading: boolean;
   onOpenConversation?: (targetUserId: string, partnerProfile?: any) => void;
+  onOpenProfile?: (userId: string) => void;
 }
 
 export function ConnectionsList({
@@ -16,6 +17,7 @@ export function ConnectionsList({
   onBlock,
   isLoading,
   onOpenConversation,
+  onOpenProfile,
 }: ConnectionsListProps) {
   const [confirmUnfriendId, setConfirmUnfriendId] = useState<string | null>(null);
   const [confirmBlockId, setConfirmBlockId] = useState<string | null>(null);
@@ -87,7 +89,12 @@ export function ConnectionsList({
           >
             {/* User Profile Header */}
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => other?.id && onOpenProfile?.(other.id)}
+                className="flex items-center gap-3 min-w-0 text-left cursor-pointer hover:opacity-85 transition-opacity"
+                title={`View ${other?.display_name || other?.username}'s profile`}
+              >
                 <div className="w-11 h-11 rounded-xl bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-300 overflow-hidden shrink-0">
                   {other?.avatar_url ? (
                     <img 
@@ -108,7 +115,7 @@ export function ConnectionsList({
                     @{other?.username || 'member'}
                   </div>
                 </div>
-              </div>
+              </button>
 
               <div className="flex items-center gap-1 text-[10px] text-stone-400 font-mono shrink-0">
                 <Calendar className="w-3 h-3 text-stone-400" />

@@ -8,12 +8,14 @@ interface FindPeopleProps {
   currentUserId: string;
   onSendRequest: (recipientId: string, context: string) => Promise<void>;
   isSendingRequest: boolean;
+  onOpenProfile?: (userId: string) => void;
 }
 
 export function FindPeople({
   currentUserId,
   onSendRequest,
   isSendingRequest,
+  onOpenProfile,
 }: FindPeopleProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TchatProfileSummary[]>([]);
@@ -99,7 +101,12 @@ export function FindPeople({
               id={`person-card-${person.username}`}
               className="p-3.5 rounded-2xl bg-stone-900/70 border border-stone-800/80 flex items-center justify-between gap-3 hover:border-stone-700/80 transition-all"
             >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => onOpenProfile?.(person.id)}
+                className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer hover:opacity-85 transition-opacity"
+                title={`View ${person.display_name || person.username}'s profile`}
+              >
                 <div className="w-11 h-11 rounded-xl bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-300 overflow-hidden shrink-0">
                   {person.avatar_url ? (
                     <img 
@@ -127,7 +134,7 @@ export function FindPeople({
                     </p>
                   )}
                 </div>
-              </div>
+              </button>
 
               {/* Relationship Action / Badge */}
               <div className="shrink-0">

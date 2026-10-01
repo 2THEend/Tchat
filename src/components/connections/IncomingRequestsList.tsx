@@ -8,6 +8,7 @@ interface IncomingRequestsListProps {
   onDecline: (requestId: string, senderId?: string) => Promise<void>;
   onIgnore: (requestId: string) => Promise<void>;
   isLoading: boolean;
+  onOpenProfile?: (userId: string) => void;
 }
 
 export function IncomingRequestsList({
@@ -16,6 +17,7 @@ export function IncomingRequestsList({
   onDecline,
   onIgnore,
   isLoading,
+  onOpenProfile,
 }: IncomingRequestsListProps) {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -72,7 +74,12 @@ export function IncomingRequestsList({
           >
             {/* Sender Identity Info */}
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => sender?.id && onOpenProfile?.(sender.id)}
+                className="flex items-center gap-3 min-w-0 text-left cursor-pointer hover:opacity-85 transition-opacity"
+                title={`View ${sender?.display_name || sender?.username}'s profile`}
+              >
                 <div className="w-11 h-11 rounded-xl bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-300 overflow-hidden shrink-0">
                   {sender?.avatar_url ? (
                     <img 
@@ -93,7 +100,7 @@ export function IncomingRequestsList({
                     @{sender?.username || 'member'}
                   </div>
                 </div>
-              </div>
+              </button>
 
               <span className="text-[10px] text-stone-400 font-mono shrink-0">
                 {dateFormatted}

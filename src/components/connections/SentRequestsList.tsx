@@ -6,12 +6,14 @@ interface SentRequestsListProps {
   requests: TchatConnectionRequest[];
   onCancel: (requestId: string, recipientId: string) => Promise<void>;
   isLoading: boolean;
+  onOpenProfile?: (userId: string) => void;
 }
 
 export function SentRequestsList({
   requests,
   onCancel,
   isLoading,
+  onOpenProfile,
 }: SentRequestsListProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +66,12 @@ export function SentRequestsList({
             className="p-4 rounded-2xl bg-stone-900/70 border border-stone-800/80 space-y-3"
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => recipient?.id && onOpenProfile?.(recipient.id)}
+                className="flex items-center gap-3 min-w-0 text-left cursor-pointer hover:opacity-85 transition-opacity"
+                title={`View ${recipient?.display_name || recipient?.username}'s profile`}
+              >
                 <div className="w-11 h-11 rounded-xl bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-300 overflow-hidden shrink-0">
                   {recipient?.avatar_url ? (
                     <img 
@@ -85,7 +92,7 @@ export function SentRequestsList({
                     @{recipient?.username || 'member'}
                   </div>
                 </div>
-              </div>
+              </button>
 
               <div className="flex items-center gap-1 text-[10px] text-stone-400 font-mono shrink-0">
                 <Clock className="w-3 h-3 text-stone-400" />

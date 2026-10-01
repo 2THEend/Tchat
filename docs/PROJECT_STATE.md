@@ -66,6 +66,14 @@ These conceptual distinctions must **NEVER** be collapsed:
     - Input validation rules and constants in `src/domains/identity/validation.ts` including `validateAvatarFile`, `MAX_AVATAR_SIZE_BYTES`, and `ALLOWED_AVATAR_MIME_TYPES`.
     - Editable Profile surface in `src/components/profile/ProfileView.tsx`: Edit Profile trigger, in-place editing form, instant camera/photo upload and preview, photo removal, live character counters (display name, username, bio), debounced username availability validation, error banners, and synchronization with `AppShell` and `identityCache`.
     - 41 automated unit and integration tests passing in `test/profile.test.ts`.
+  - **Profile Phase 2 (Other User Profile & Relationship-Specific Streaks)**:
+    - Server-authoritative PostgreSQL RPC `get_other_user_profile(p_target_user_id UUID)` in migration `supabase/migrations/20261001150000_get_other_user_profile_rpc.sql` (`SECURITY DEFINER`, executed only by `authenticated` users).
+    - Authoritative relationship resolution: computes `self`, `not_connected`, `request_sent` (with `pending_request_id` and `request_context`), `request_received` (with `pending_request_id` and `request_context`), `connected` (with `conversation_id`), `blocked` (caller blocked target), and `viewer_blocked` (target blocked caller).
+    - Privacy & Security: zero exposure of internal accounts, emails, or credentials; authoritative server-side bio redaction when `viewer_blocked`.
+    - Relationship Streaks Refactoring: removed persistent streak badges taking up space in `ConversationView` and consolidated relationship continuity into the person's Profile surface under "Continuity & Streaks". Shows active/dormant status, preserved historical continuity for ended streaks, and initiation picker for unstarted streak types.
+    - Reusable Other User Profile component in `src/components/profile/OtherUserProfileModal.tsx`: clean modal/sheet presenting identity, contextual relationship actions (Message, Connect with 3–300 char note, Cancel request, Accept/Decline request, Disconnect with confirmation, Block with confirmation, and Unblock), and continuity streaks.
+    - Integrated profile tap targets across the entire application: 1:1 conversation header (`ConversationHeader`), connections list (`ConnectionsList`), incoming requests (`IncomingRequestsList`), sent requests (`SentRequestsList`), people search (`FindPeople`), group member directory (`GroupMembersModal`), group message bubbles (`GroupMessageBubble`), circle member directory (`CircleMembersModal`), and circle message streams (`CircleConversationView`).
+    - 36 automated unit, privacy contract, relationship state, and live PostgreSQL RPC checks passing in `test/other_user_profile.test.ts`.
 - **Connections Domain**:
   - `connection_requests` table with 3–300 character mandatory context constraint.
   - Request lifecycle statuses: `pending`, `accepted`, `declined`, `ignored`, `cancelled`.

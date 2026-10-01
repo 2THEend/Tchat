@@ -18,6 +18,7 @@ interface GroupMembersModalProps {
   groupName: string;
   isOpen: boolean;
   onClose: () => void;
+  onOpenProfile?: (userId: string) => void;
 }
 
 export function GroupMembersModal({
@@ -25,6 +26,7 @@ export function GroupMembersModal({
   groupName,
   isOpen,
   onClose,
+  onOpenProfile,
 }: GroupMembersModalProps) {
   const [members, setMembers] = useState<TchatGroupMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -160,7 +162,12 @@ export function GroupMembersModal({
                     id={`member-row-${member.user_id}`}
                     className="p-3 rounded-2xl bg-stone-900/50 border border-stone-800/60 flex items-center justify-between gap-3 hover:bg-stone-900/80 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => onOpenProfile?.(member.user_id)}
+                      className="flex items-center gap-3 min-w-0 text-left hover:opacity-85 transition-opacity cursor-pointer flex-1"
+                      title={`View ${member.display_name || member.username || 'Member'}'s profile`}
+                    >
                       {member.avatar_url ? (
                         <img
                           src={member.avatar_url}
@@ -173,7 +180,7 @@ export function GroupMembersModal({
                         </div>
                       )}
 
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-stone-200 truncate">
                           {member.display_name || member.username || 'Member'}
                         </p>
@@ -183,7 +190,7 @@ export function GroupMembersModal({
                           </p>
                         )}
                       </div>
-                    </div>
+                    </button>
 
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       {renderRoleBadge(member.role)}

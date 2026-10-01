@@ -31,6 +31,7 @@ import { GroupMessageComposer } from './GroupMessageComposer';
 import { GroupCirclesContextBar } from './GroupCirclesContextBar';
 import { CreateCircleModal } from './CreateCircleModal';
 import { CircleConversationView } from './CircleConversationView';
+import { OtherUserProfileModal } from '../profile/OtherUserProfileModal';
 import { 
   getGroupDetails, 
   getGroupJoinRequests, 
@@ -72,6 +73,9 @@ export function ActiveGroupView({
   // Circle states (Phase 6.5)
   const [selectedCircle, setSelectedCircle] = useState<TchatCircle | null>(null);
   const [isCreateCircleModalOpen, setIsCreateCircleModalOpen] = useState(false);
+
+  // Profile modal state
+  const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
 
   // Message stream states
   const [messages, setMessages] = useState<GroupMessage[]>([]);
@@ -615,6 +619,7 @@ export function ActiveGroupView({
               groupId={group.id}
               showSenderHeader={showSenderHeader}
               onMediaSaved={handleMediaSaved}
+              onOpenProfile={setViewingProfileUserId}
             />
           );
         })}
@@ -639,6 +644,7 @@ export function ActiveGroupView({
         groupName={group.name}
         isOpen={isMembersModalOpen}
         onClose={() => setIsMembersModalOpen(false)}
+        onOpenProfile={setViewingProfileUserId}
       />
 
       <GroupJoinRequestsModal
@@ -670,6 +676,14 @@ export function ActiveGroupView({
         isOpen={isCreateCircleModalOpen}
         onClose={() => setIsCreateCircleModalOpen(false)}
         onCreated={(newCircle) => setSelectedCircle(newCircle)}
+      />
+
+      {/* Other User Profile Modal */}
+      <OtherUserProfileModal
+        targetUserId={viewingProfileUserId}
+        currentUserId={currentUserId}
+        isOpen={Boolean(viewingProfileUserId)}
+        onClose={() => setViewingProfileUserId(null)}
       />
     </div>
   );
