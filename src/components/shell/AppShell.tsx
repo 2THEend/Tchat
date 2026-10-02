@@ -21,6 +21,7 @@ import {
 import { parseAuthUrlParams, formatAuthUrlError, clearAuthUrlParams } from '../../domains/auth/urlHandler';
 import { getIncomingRequests, getConnections } from '../../domains/connections/connectionsService';
 import { onConnectionEvent } from '../../domains/connections/events';
+import { ConnectionsActiveTab } from '../../domains/connections/types';
 import { ConversationView } from '../conversations/ConversationView';
 import { TchatConversation } from '../../domains/conversations/types';
 import { 
@@ -52,6 +53,7 @@ export function AppShell() {
   // Navigation
   const [currentPlace, setCurrentPlace] = useState<NavigationPlace>('home');
   const [isViewingConnections, setIsViewingConnections] = useState<boolean>(false);
+  const [connectionsActiveTab, setConnectionsActiveTab] = useState<ConnectionsActiveTab>('connections');
   const [isCreatingGroup, setIsCreatingGroup] = useState<boolean>(false);
   const [viewingGroup, setViewingGroup] = useState<GroupDetails | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -61,6 +63,11 @@ export function AppShell() {
   const [isLoadingActiveGroups, setIsLoadingActiveGroups] = useState<boolean>(false);
   const [incomingCount, setIncomingCount] = useState<number>(0);
   const [connectionsCount, setConnectionsCount] = useState<number>(0);
+
+  const handleOpenConnections = useCallback((tab: ConnectionsActiveTab = 'connections') => {
+    setConnectionsActiveTab(tab);
+    setIsViewingConnections(true);
+  }, []);
 
   // Conversations State
   const [conversations, setConversations] = useState<TchatConversation[]>([]);
@@ -133,6 +140,11 @@ export function AppShell() {
       const res = await getUserConversations(userId);
       if (res.data) {
         setConversations(res.data);
+        setActiveConversation((prev) => {
+          if (!prev) return null;
+          const updated = res.data?.find((c) => c.id === prev.id);
+          return updated ? { ...prev, ...updated } : prev;
+        });
       }
     } catch {
       // Gracefully ignore if schema pending
@@ -695,6 +707,7 @@ export function AppShell() {
               conversationId={activeConversation.id}
               currentUserId={user.id}
               partner={activeConversation.other_participant}
+              isArchived={Boolean(activeConversation.is_archived)}
               onBack={handleCloseConversation}
             />
           ) : activeGroupSpace ? (
@@ -762,6 +775,7 @@ export function AppShell() {
           ) : currentPlace === 'home' && isViewingConnections ? (
             <ConnectionsView
               currentUserId={user.id}
+              initialTab={connectionsActiveTab}
               onBackToHome={() => setIsViewingConnections(false)}
               onOpenConversation={handleOpenConversationFromConnection}
             />
@@ -772,7 +786,8 @@ export function AppShell() {
               account={account}
               onSignOut={handleSignOut}
               isSigningOut={isSigningOut}
-              onOpenConnections={() => setIsViewingConnections(true)}
+              onOpenConnections={handleOpenConnections}
+              onFindPeople={() => handleOpenConnections('find')}
               onCreateGroup={() => {
                 setIsViewingConnections(false);
                 setActiveConversation(null);
@@ -804,6 +819,7 @@ export function AppShell() {
           {!activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && currentPlace === 'profile' && isViewingConnections ? (
             <ConnectionsView
               currentUserId={user.id}
+              initialTab={connectionsActiveTab}
               onBackToHome={() => setIsViewingConnections(false)}
               onOpenConversation={handleOpenConversationFromConnection}
             />
@@ -813,7 +829,7 @@ export function AppShell() {
               profile={profile}
               account={account}
               connectionsCount={connectionsCount}
-              onOpenConnections={() => setIsViewingConnections(true)}
+              onOpenConnections={() => handleOpenConnections('connections')}
               onSignOut={handleSignOut}
               isSigningOut={isSigningOut}
               onProfileUpdated={(updatedProfile) => {

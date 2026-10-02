@@ -20,6 +20,7 @@ import { User } from '@supabase/supabase-js';
 import { TchatProfile, TchatAccount } from '../../domains/identity/types';
 import { TchatConversation } from '../../domains/conversations/types';
 import { UserActiveGroupItem, GroupRole } from '../../domains/groups/types';
+import { ConnectionsActiveTab } from '../../domains/connections/types';
 import { TodayConversationsList } from '../conversations/TodayConversationsList';
 
 interface HomeAuthenticatedViewProps {
@@ -28,7 +29,8 @@ interface HomeAuthenticatedViewProps {
   account: TchatAccount | null;
   onSignOut?: () => void;
   isSigningOut?: boolean;
-  onOpenConnections?: () => void;
+  onOpenConnections?: (tab?: ConnectionsActiveTab) => void;
+  onFindPeople?: () => void;
   incomingRequestsCount?: number;
   connectionsCount?: number;
   conversations?: TchatConversation[];
@@ -44,6 +46,7 @@ interface HomeAuthenticatedViewProps {
 export function HomeAuthenticatedView({
   profile,
   onOpenConnections,
+  onFindPeople,
   incomingRequestsCount = 0,
   connectionsCount = 0,
   conversations = [],
@@ -92,7 +95,7 @@ export function HomeAuthenticatedView({
         <div 
           id="home-incoming-requests-alert"
           role="alert"
-          onClick={onOpenConnections}
+          onClick={() => onOpenConnections('incoming')}
           className="p-3.5 rounded-2xl bg-amber-950/30 border border-amber-800/50 flex items-center justify-between gap-3 cursor-pointer hover:bg-amber-950/40 transition-colors"
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -121,7 +124,8 @@ export function HomeAuthenticatedView({
         conversations={conversations}
         isLoading={isLoadingConversations}
         onSelectConversation={(conv) => onSelectConversation?.(conv)}
-        onOpenConnections={() => onOpenConnections?.()}
+        onOpenConnections={() => onOpenConnections?.('connections')}
+        currentUserId={profile.id}
       />
 
       {/* 4. Intentional Temporary Groups Section (Isolated from 1:1 Home activity) */}
@@ -288,7 +292,7 @@ export function HomeAuthenticatedView({
             <button
               id="btn-home-manage-connections"
               type="button"
-              onClick={onOpenConnections}
+              onClick={() => onOpenConnections?.('connections')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors cursor-pointer"
             >
               <span>Manage</span>
@@ -303,7 +307,7 @@ export function HomeAuthenticatedView({
             <button
               id="btn-home-find-people"
               type="button"
-              onClick={onOpenConnections}
+              onClick={() => (onFindPeople ? onFindPeople() : onOpenConnections?.('find'))}
               className="inline-flex items-center gap-1 text-stone-300 hover:text-stone-100 font-medium transition-colors cursor-pointer"
             >
               <UserPlus className="w-3 h-3" />

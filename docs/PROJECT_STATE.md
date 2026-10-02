@@ -13,17 +13,21 @@
 
 ## Current Stage
 
-**Groups — Phase 6.3 Checkpoint Fix: Group Media RLS Resolved & Verified.**
-- Resolved Group Media storage and database RLS failure (`42501: new row violates row-level security policy`).
-- Root causes addressed:
-  1. `storage.objects` INSERT policy evaluated `(storage.foldername(name))[2]` inside `EXISTS (SELECT 1 FROM public.groups g ...)`. PostgreSQL resolved `name` to `groups.name` (`g.name`), returning `NULL` and rejecting valid group uploads. Corrected to explicitly qualify table `objects.name`.
-  2. `storage.objects` SELECT policy required an existing `media_assets` row, but during client upload (`supabase.storage.from(...).upload`), Supabase Storage executes `INSERT ... RETURNING *`. Because `media_assets` registration occurs after file upload, evaluating SELECT policies on the new row failed unless `owner = auth.uid()` was permitted for active members.
-  3. Extended `public.media_assets` INSERT and UPDATE policies to authoritatively validate group membership, unbanned status, and active group lifecycle for `group_id` media.
-  4. Extended `public.save_media_asset` RPC to support group media assets with server-side authorization.
-- Added comprehensive migration `supabase/migrations/20260918120000_fix_group_media_rls.sql`.
-- 9 automated regression tests passing in `test/group_media_rls_regression.test.ts`.
-- 10 automated end-to-end checks verified passing in `test/group_conversation_phase6_3.test.ts`.
-- Build and TypeScript checks clean with 0 errors.
+**Home / History / Archive — Semantic Separation Resolved & Verified.**
+- Addressed product-model mismatch where Home, History, and Archive previously conflated distinct concepts.
+- **Home Semantics**: Strict 1:1 qualifying interaction during user's current local calendar day (`shouldConversationAppearOnHome`). Inactivity naturally moves conversations off Home without archiving them. Connecting with someone does not create Home activity.
+- **History Semantics**: Persistent WhatsApp-style conversation list containing all normal 1:1 conversations accessible to the user (today, yesterday, older, and inactive). Excludes explicitly archived conversations and group/circle spaces.
+- **Archive Semantics & Data Model**: Explicit per-user organizational state via `public.conversation_archives` table (`user_id`, `conversation_id`, `archived_at`). RLS policies restrict SELECT, INSERT, and DELETE strictly to the authenticated participant (`user_id = auth.uid()`). Archiving does not delete messages, connections, or streaks, and does not alter the other participant's history or archive state.
+- **New Activity on Archived Chat**: If meaningful activity occurs today after a conversation was archived (`last_activity_at > archived_at`), it surfaces on Home to represent today's social reality, while retaining its explicit archive state in History until unarchived.
+- **Operations & UI**:
+  - PostgreSQL RPCs `archive_conversation(p_conversation_id)` and `unarchive_conversation(p_conversation_id)` with `SECURITY DEFINER` and caller validation.
+  - Client operations `archiveConversation`, `unarchiveConversation`, and `getArchivedConversations`.
+  - Exposed distinct `History ({count})` and `Archive ({count})` destinations directly in the Home header, with empty-state secondary action routing directly to "View archive".
+  - Cleanly decoupled the History modal and Archive modal so Archive is not hidden as a nested row inside History.
+  - Added archive/unarchive actions and status banner to `ConversationHeader` and `ConversationView`.
+- 44 automated tests passing in `test/home_history_archive_separation.test.ts`.
+- 41 profile tests, 36 other-user profile tests, 20 lifecycle tests, 13 connections tests all verified passing.
+- TypeScript check (`tsc --noEmit`) and Vite build verified clean with 0 errors.
 
 ---
 

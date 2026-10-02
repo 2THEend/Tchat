@@ -8,7 +8,9 @@ export type ConversationDomainEvent =
   | { type: 'message:sent'; conversationId: string; message: TchatMessage }
   | { type: 'message:received'; conversationId: string; message: TchatMessage }
   | { type: 'conversation:read'; conversationId: string; userId: string }
-  | { type: 'conversation:activity_updated'; conversationId: string; lastActivityAt: string };
+  | { type: 'conversation:activity_updated'; conversationId: string; lastActivityAt: string }
+  | { type: 'conversation:archived'; conversationId: string; userId: string }
+  | { type: 'conversation:unarchived'; conversationId: string; userId: string };
 
 type Listener = (event: ConversationDomainEvent) => void;
 const listeners = new Set<Listener>();

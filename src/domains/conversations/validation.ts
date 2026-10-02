@@ -124,3 +124,46 @@ export function isConversationActiveToday(
     );
   }
 }
+
+/**
+ * Determines whether a 1:1 conversation should appear on the Home surface.
+ * 
+ * Product Rules:
+ * 1. Home represents intentional 1:1 social activity during the user's current LOCAL calendar day.
+ * 2. Non-archived conversations appear on Home when they have qualifying activity today.
+ * 3. Inactive conversations naturally leave Home when the day ends without being archived.
+ * 4. Explicitly archived conversations do NOT appear on Home unless NEW meaningful activity
+ *    occurs today after being archived (last_activity_at > archived_at).
+ *    In that case, today's social reality surfaces on Home, while the explicit archive
+ *    organization state is preserved in History until unarchived.
+ */
+export function shouldConversationAppearOnHome(
+  conv: {
+    last_activity_at?: string | null;
+    is_archived?: boolean | null;
+    archived_at?: string | null;
+  },
+  clientTimezone?: string,
+  referenceDate: Date = new Date()
+): boolean {
+  if (!conv || !conv.last_activity_at) {
+    return false;
+  }
+
+  if (!isConversationActiveToday(conv.last_activity_at, clientTimezone, referenceDate)) {
+    return false;
+  }
+
+  if (!conv.is_archived) {
+    return true;
+  }
+
+  // For archived conversations: new activity must have occurred AFTER the archive timestamp
+  if (conv.archived_at) {
+    const activityTime = new Date(conv.last_activity_at).getTime();
+    const archivedTime = new Date(conv.archived_at).getTime();
+    return activityTime > archivedTime;
+  }
+
+  return false;
+}

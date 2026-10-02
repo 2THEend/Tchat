@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, AlertCircle } from 'lucide-react';
+import { Database, AlertCircle, Archive } from 'lucide-react';
 import { 
   TchatMessage, 
   TchatParticipantProfile 
@@ -10,7 +10,9 @@ import { TchatCall } from '../../domains/calls/types';
 import { 
   getConversationMessages, 
   sendMessage as apiSendMessage, 
-  markConversationRead 
+  markConversationRead,
+  archiveConversation,
+  unarchiveConversation
 } from '../../domains/conversations/conversationsService';
 import { getConversationStreaks } from '../../domains/streaks/streaksService';
 import { getActiveCallForConversation } from '../../domains/calls/callsService';
@@ -35,6 +37,7 @@ interface ConversationViewProps {
   currentUserId: string;
   partner: TchatParticipantProfile;
   onBack: () => void;
+  isArchived?: boolean;
 }
 
 export const ConversationView: React.FC<ConversationViewProps> = ({
@@ -42,6 +45,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   currentUserId,
   partner,
   onBack,
+  isArchived = false,
 }) => {
   const [messages, setMessages] = useState<TchatMessage[]>([]);
   const [streaks, setStreaks] = useState<TchatStreak[]>([]);
@@ -54,6 +58,21 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isSchemaPending, setIsSchemaPending] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isArchivedState, setIsArchivedState] = useState<boolean>(isArchived);
+
+  useEffect(() => {
+    setIsArchivedState(isArchived);
+  }, [isArchived]);
+
+  const handleArchive = async () => {
+    setIsArchivedState(true);
+    await archiveConversation(conversationId, currentUserId);
+  };
+
+  const handleUnarchive = async () => {
+    setIsArchivedState(false);
+    await unarchiveConversation(conversationId, currentUserId);
+  };
 
   const isMountedRef = useRef(true);
 
@@ -342,7 +361,31 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         onOpenPartnerProfile={() => setIsPartnerProfileOpen(true)}
         onOpenCallRequest={() => setIsCallModalOpen(true)}
         hasActiveCall={!!activeCall && ['pending', 'accepted', 'connecting', 'connected'].includes(activeCall.status)}
+        isArchived={isArchivedState}
+        onArchive={handleArchive}
+        onUnarchive={handleUnarchive}
       />
+
+      {/* Archived Conversation Banner */}
+      {isArchivedState && (
+        <div 
+          id="archived-conversation-banner" 
+          className="px-4 py-2 bg-amber-950/30 border-b border-amber-900/40 flex items-center justify-between text-[11px] text-amber-200/90 shrink-0"
+        >
+          <div className="flex items-center gap-2">
+            <Archive className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>This conversation is archived. New activity will surface on Home.</span>
+          </div>
+          <button
+            id="btn-banner-unarchive"
+            type="button"
+            onClick={handleUnarchive}
+            className="font-medium text-amber-300 hover:text-white underline underline-offset-2 cursor-pointer ml-2 shrink-0"
+          >
+            Unarchive
+          </button>
+        </div>
+      )}
 
       {/* Pending Call Request Banner */}
       {activeCall && activeCall.status === 'pending' && (

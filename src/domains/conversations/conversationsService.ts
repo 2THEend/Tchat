@@ -64,6 +64,8 @@ export async function getUserConversations(
       created_at: row.created_at,
       updated_at: row.updated_at,
       unread_count: Number(row.unread_count || 0),
+      is_archived: Boolean(row.is_archived),
+      archived_at: row.archived_at || null,
       other_participant: {
         id: row.other_id,
         username: row.other_username,
@@ -428,3 +430,92 @@ export async function markConversationRead(
     return { data: 0, error: err?.message || 'Failed to mark conversation read.' };
   }
 }
+
+/**
+ * Explicitly archives a 1:1 conversation for the current user.
+ * 
+ * - Per-user organizational state (does NOT affect the other participant)
+ * - Does not delete messages, connections, or streaks
+ */
+export async function archiveConversation(
+  conversationId: string,
+  currentUserId?: string
+): Promise<ConversationsServiceResult<void>> {
+  if (!supabase) {
+    return { error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { error } = await supabase.rpc('archive_conversation', {
+      p_conversation_id: conversationId,
+    });
+
+    if (error) {
+      if (isPendingSchemaError(error)) {
+        return { isSchemaPending: true, error: error.message };
+      }
+      return { error: error.message };
+    }
+
+    emitConversationEvent({
+      type: 'conversation:archived',
+      conversationId,
+      userId: currentUserId || '',
+    });
+
+    return {};
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to archive conversation.' };
+  }
+}
+
+/**
+ * Unarchives a previously archived 1:1 conversation for the current user,
+ * returning it to the user's normal History list.
+ */
+export async function unarchiveConversation(
+  conversationId: string,
+  currentUserId?: string
+): Promise<ConversationsServiceResult<void>> {
+  if (!supabase) {
+    return { error: 'Supabase client is not initialized.' };
+  }
+
+  try {
+    const { error } = await supabase.rpc('unarchive_conversation', {
+      p_conversation_id: conversationId,
+    });
+
+    if (error) {
+      if (isPendingSchemaError(error)) {
+        return { isSchemaPending: true, error: error.message };
+      }
+      return { error: error.message };
+    }
+
+    emitConversationEvent({
+      type: 'conversation:unarchived',
+      conversationId,
+      userId: currentUserId || '',
+    });
+
+    return {};
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to unarchive conversation.' };
+  }
+}
+
+/**
+ * Retrieves all explicitly archived 1:1 conversations for the current user.
+ */
+export async function getArchivedConversations(
+  currentUserId: string
+): Promise<ConversationsServiceResult<TchatConversation[]>> {
+  const result = await getUserConversations(currentUserId);
+  if (result.error || result.isSchemaPending) {
+    return result;
+  }
+  const archived = (result.data || []).filter((c) => Boolean(c.is_archived));
+  return { data: archived };
+}
+

@@ -1,4 +1,4 @@
-import { ArrowLeft, User, RotateCw, Phone } from 'lucide-react';
+import { ArrowLeft, User, RotateCw, Phone, Archive, ArchiveRestore } from 'lucide-react';
 import { TchatParticipantProfile } from '../../domains/conversations/types';
 
 interface ConversationHeaderProps {
@@ -9,6 +9,9 @@ interface ConversationHeaderProps {
   onOpenPartnerProfile?: () => void;
   onOpenCallRequest?: () => void;
   hasActiveCall?: boolean;
+  isArchived?: boolean;
+  onArchive?: () => void;
+  onUnarchive?: () => void;
 }
 
 export function ConversationHeader({
@@ -19,6 +22,9 @@ export function ConversationHeader({
   onOpenPartnerProfile,
   onOpenCallRequest,
   hasActiveCall = false,
+  isArchived = false,
+  onArchive,
+  onUnarchive,
 }: ConversationHeaderProps) {
   return (
     <header 
@@ -93,6 +99,34 @@ export function ConversationHeader({
         >
           <RotateCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
         </button>
+
+        {isArchived ? (
+          onUnarchive && (
+            <button
+              id="btn-header-unarchive"
+              type="button"
+              onClick={onUnarchive}
+              aria-label="Unarchive conversation"
+              title="Unarchive Conversation"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-amber-400 hover:text-amber-300 hover:bg-stone-900 transition-colors cursor-pointer"
+            >
+              <ArchiveRestore className="w-4 h-4" />
+            </button>
+          )
+        ) : (
+          onArchive && (
+            <button
+              id="btn-header-archive"
+              type="button"
+              onClick={onArchive}
+              aria-label="Archive conversation"
+              title="Archive Conversation"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-stone-400 hover:text-stone-200 hover:bg-stone-900 transition-colors cursor-pointer"
+            >
+              <Archive className="w-4 h-4" />
+            </button>
+          )
+        )}
       </div>
     </header>
   );

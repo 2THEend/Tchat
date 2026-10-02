@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
   Sparkles, 
@@ -12,7 +12,10 @@ import {
   Check, 
   Loader2,
   ShieldAlert,
-  Calendar
+  Calendar,
+  Camera,
+  Upload,
+  Trash2
 } from 'lucide-react';
 import { 
   GroupLifetime, 
@@ -27,6 +30,8 @@ import {
   validateGroupReason
 } from '../../domains/groups/validation';
 import { createGroup, getGroupDetails } from '../../domains/groups/groupsService';
+import { validateAvatarFile } from '../../domains/identity/validation';
+import { supabase } from '../../lib/supabase';
 
 interface CreateGroupViewProps {
   currentUserId: string;
@@ -46,6 +51,7 @@ const VISIBILITY_OPTIONS: { id: GroupVisibility; label: string; description: str
 ];
 
 export function CreateGroupView({
+  currentUserId,
   onBack,
   onGroupCreated,
 }: CreateGroupViewProps) {
@@ -57,9 +63,16 @@ export function CreateGroupView({
   const [accessMode, setAccessMode] = useState<GroupAccessMode>('request');
   const [joiningQuestion, setJoiningQuestion] = useState('');
   const [maxSize, setMaxSize] = useState<number>(30);
+
+  // Cover Image State (Native File Upload + Optional URL Fallback)
   const [coverUrl, setCoverUrl] = useState('');
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState('');
+  const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
+  const [showManualUrlInput, setShowManualUrlInput] = useState(false);
   const [isTestingCover, setIsTestingCover] = useState(false);
   const [coverLoadFailed, setCoverLoadFailed] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,10 +92,16 @@ export function CreateGroupView({
     }
   }, [accessMode]);
 
-  // Handle Cover URL Preview Check
+  // Handle Cover URL Preview Check (Only for web URLs, not blob preview URLs)
   useEffect(() => {
     const trimmed = coverUrl.trim();
     if (!trimmed) {
+      setCoverLoadFailed(false);
+      setIsTestingCover(false);
+      return;
+    }
+
+    if (trimmed.startsWith('blob:')) {
       setCoverLoadFailed(false);
       setIsTestingCover(false);
       return;
@@ -111,33 +130,92 @@ export function CreateGroupView({
     img.src = trimmed;
   }, [coverUrl]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const val = validateAvatarFile(file);
+    if (!val.isValid) {
+      setCoverUploadError(val.error || 'Invalid image file (must be JPEG/PNG/WebP/GIF up to 5MB).');
+      return;
+    }
+
+    setCoverUploadError(null);
+    setCoverFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setCoverPreviewUrl(objectUrl);
+    setCoverUrl(objectUrl);
+  };
+
+  const handleRemoveCover = () => {
+    setCoverFile(null);
+    setCoverPreviewUrl('');
+    setCoverUrl('');
+    setCoverUploadError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
 
-    const input: CreateGroupInput = {
-      name: name.trim(),
-      reason: reason.trim(),
-      lifetime,
-      visibility,
-      access_mode: accessMode,
-      joiningQuestion: accessMode === 'question' ? joiningQuestion.trim() : undefined,
-      maxSize,
-      coverUrl: coverUrl.trim() && !coverLoadFailed ? coverUrl.trim() : undefined,
-    };
-
-    // Client-side invariant check
-    const validation = validateCreateGroupInput(input);
-    if (!validation.isValid) {
-      setSubmitError(validation.error || 'Please correct the highlighted errors.');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
+      let finalCoverUrl: string | undefined = undefined;
+
+      // If user selected a device photo, upload it to the public avatars storage bucket
+      if (coverFile && currentUserId && supabase) {
+        const ext = coverFile.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const cleanExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext) ? ext : 'jpg';
+        const filePath = `${currentUserId}/groups/cover-${Date.now()}.${cleanExt}`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, coverFile, {
+            cacheControl: '3600',
+            upsert: true,
+          });
+
+        if (uploadErr) {
+          setSubmitError(`Failed to upload cover photo: ${uploadErr.message}`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        const { data: publicData } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        finalCoverUrl = publicData?.publicUrl;
+      } else if (coverUrl.trim() && !coverLoadFailed && !coverUrl.startsWith('blob:')) {
+        finalCoverUrl = coverUrl.trim();
+      }
+
+      const input: CreateGroupInput = {
+        name: name.trim(),
+        reason: reason.trim(),
+        lifetime,
+        visibility,
+        access_mode: accessMode,
+        joiningQuestion: accessMode === 'question' ? joiningQuestion.trim() : undefined,
+        maxSize,
+        coverUrl: finalCoverUrl,
+      };
+
+      // Client-side invariant check
+      const validation = validateCreateGroupInput(input);
+      if (!validation.isValid) {
+        setSubmitError(validation.error || 'Please correct the highlighted errors.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const res = await createGroup(input);
       if (res.error || !res.data) {
         setSubmitError(res.error || 'Failed to create group on server.');
+        setIsSubmitting(false);
         return;
       }
 
@@ -236,37 +314,51 @@ export function CreateGroupView({
         )}
 
         {/* 1. Cover Image Section */}
-        <section id="group-cover-section" className="space-y-2">
-          <label htmlFor="group-cover-url" className="flex items-center justify-between text-[11px] font-medium text-stone-300">
+        <section id="group-cover-section" className="space-y-2.5">
+          <div className="flex items-center justify-between text-[11px] font-medium text-stone-300">
             <span className="flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-stone-400" />
-              <span>Cover (Optional)</span>
+              <Camera className="w-3.5 h-3.5 text-stone-400" />
+              <span>Cover Photo (Optional)</span>
             </span>
-            {coverUrl && !coverLoadFailed && !isTestingCover && (
+            {coverPreviewUrl && !coverUploadError && (
               <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                <Check className="w-3 h-3" /> Valid image
+                <Check className="w-3 h-3" /> Ready
               </span>
             )}
-            {coverLoadFailed && (
+            {coverUploadError && (
               <span className="text-[10px] text-rose-400 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> Could not load image
+                <AlertCircle className="w-3 h-3" /> {coverUploadError}
               </span>
             )}
-          </label>
+          </div>
 
           {/* Cover Preview Area */}
-          <div className="relative w-full h-32 rounded-2xl bg-stone-900/80 border border-stone-800 overflow-hidden flex items-center justify-center">
-            {coverUrl && !coverLoadFailed ? (
-              <img 
-                src={coverUrl} 
-                alt="Group cover preview" 
-                className="w-full h-full object-cover"
-                onError={() => setCoverLoadFailed(true)}
-              />
+          <div 
+            onClick={() => fileInputRef.current?.click()}
+            className="relative w-full h-36 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-stone-700/80 overflow-hidden flex items-center justify-center cursor-pointer transition-colors group"
+          >
+            {coverPreviewUrl || (coverUrl && !coverLoadFailed) ? (
+              <>
+                <img 
+                  src={coverPreviewUrl || coverUrl} 
+                  alt="Group cover preview" 
+                  className="w-full h-full object-cover"
+                  onError={() => setCoverLoadFailed(true)}
+                />
+                <div className="absolute inset-0 bg-stone-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-xs text-stone-200">
+                  <Camera className="w-4 h-4" />
+                  <span>Change photo</span>
+                </div>
+              </>
             ) : (
-              <div className="flex flex-col items-center gap-1.5 text-stone-500 text-center p-4">
-                <ImageIcon className="w-6 h-6 stroke-[1.5]" />
-                <span className="text-[11px]">No cover selected</span>
+              <div className="flex flex-col items-center gap-2 text-stone-400 text-center p-4">
+                <div className="w-10 h-10 rounded-xl bg-stone-800 border border-stone-700/60 flex items-center justify-center text-stone-300 group-hover:scale-105 transition-transform">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-stone-300">Upload cover photo</p>
+                  <p className="text-[10px] text-stone-500">Tap to browse your device</p>
+                </div>
               </div>
             )}
             {isTestingCover && (
@@ -277,20 +369,67 @@ export function CreateGroupView({
             )}
           </div>
 
-          {/* Input & Storage Note */}
-          <div className="space-y-1">
-            <input
-              id="group-cover-url"
-              type="url"
-              value={coverUrl}
-              onChange={(e) => setCoverUrl(e.target.value)}
-              placeholder="https://example.com/cover.jpg"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900/80 border border-stone-800 text-stone-100 placeholder-stone-600 text-xs focus:outline-none focus:border-stone-600 transition-colors"
-            />
-            <p className="text-[10px] text-stone-500 leading-relaxed">
-              Permanent device upload will arrive when the public storage bucket is configured. You can provide an image link or continue without a cover.
-            </p>
+          {/* Hidden File Input */}
+          <input
+            id="group-cover-file-input"
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>{coverPreviewUrl || coverUrl ? 'Change Photo' : 'Upload Photo'}</span>
+              </button>
+
+              {(coverPreviewUrl || coverUrl) && (
+                <button
+                  type="button"
+                  onClick={handleRemoveCover}
+                  className="px-2.5 py-1.5 rounded-xl bg-stone-900 border border-stone-800 hover:bg-rose-950/30 hover:border-rose-800 text-stone-400 hover:text-rose-300 text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Remove cover photo"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Remove</span>
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowManualUrlInput(!showManualUrlInput)}
+              className="text-[11px] text-stone-500 hover:text-stone-300 underline underline-offset-2 transition-colors cursor-pointer"
+            >
+              {showManualUrlInput ? 'Hide link input' : 'Paste link instead'}
+            </button>
           </div>
+
+          {/* Optional Direct URL Input */}
+          {showManualUrlInput && (
+            <div className="pt-1.5 space-y-1 animate-fadeIn">
+              <input
+                id="group-cover-url"
+                type="url"
+                value={coverUrl.startsWith('blob:') ? '' : coverUrl}
+                onChange={(e) => {
+                  setCoverFile(null);
+                  setCoverPreviewUrl('');
+                  setCoverUrl(e.target.value);
+                }}
+                placeholder="https://example.com/cover.jpg"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-stone-900/80 border border-stone-800 text-stone-100 placeholder-stone-600 text-xs focus:outline-none focus:border-stone-600 transition-colors"
+              />
+            </div>
+          )}
         </section>
 
         {/* 2. Group Name */}

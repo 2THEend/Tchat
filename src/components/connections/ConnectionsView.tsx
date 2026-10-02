@@ -52,6 +52,10 @@ export function ConnectionsView({
   onOpenConversation,
 }: ConnectionsViewProps) {
   const [activeTab, setActiveTab] = useState<ConnectionsActiveTab>(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
   const [connections, setConnections] = useState<TchatConnection[]>([]);
   const [incoming, setIncoming] = useState<TchatConnectionRequest[]>([]);
   const [sent, setSent] = useState<TchatConnectionRequest[]>([]);

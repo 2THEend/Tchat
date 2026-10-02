@@ -26,6 +26,8 @@ export interface TchatConversation {
   updated_at: string;
   unread_count?: number;
   other_participant?: TchatParticipantProfile;
+  is_archived?: boolean;
+  archived_at?: string | null;
 }
 
 export interface TchatMessage {
