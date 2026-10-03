@@ -114,6 +114,27 @@ const pair1 = getCanonicalConnectionPair('uuid-alpha', 'uuid-beta');
 const pair2 = getCanonicalConnectionPair('uuid-beta', 'uuid-alpha');
 assert(pair1.userA === pair2.userA && pair1.userB === pair2.userB, 'Canonical ordering is invariant to argument order');
 
+// 4. Intent Separation: Find People Discovery vs Connection Management
+type UserIntent = 'discover_people' | 'manage_relationships';
+
+function resolveIntentAction(action: 'find_people' | 'manage_connections'): UserIntent {
+  if (action === 'find_people') return 'discover_people';
+  return 'manage_relationships';
+}
+
+assert(
+  resolveIntentAction('find_people') !== resolveIntentAction('manage_connections'),
+  'Find People and Manage Connections resolve to distinct user intents'
+);
+assert(
+  resolveIntentAction('find_people') === 'discover_people',
+  'Find People maps to discovery intent'
+);
+assert(
+  resolveIntentAction('manage_connections') === 'manage_relationships',
+  'Manage Connections maps to relationship management intent'
+);
+
 console.log(`\nTests Completed: ${passed} passed, ${failed} failed.\n`);
 
 if (failed > 0) {

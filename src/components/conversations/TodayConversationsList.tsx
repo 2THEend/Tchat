@@ -122,7 +122,20 @@ export const TodayConversationsList: React.FC<TodayConversationsListProps> = ({
             >
               Message a connection
             </button>
-            {conversations.length > 0 && (
+            {historyConversations.length > 0 && (
+              <>
+                <span className="text-stone-600">•</span>
+                <button
+                  id="btn-empty-state-view-history"
+                  type="button"
+                  onClick={() => setModalMode('history')}
+                  className="text-xs text-stone-400 hover:text-stone-200 underline underline-offset-2 cursor-pointer"
+                >
+                  Browse history ({historyConversations.length})
+                </button>
+              </>
+            )}
+            {archivedConversations.length > 0 && (
               <>
                 <span className="text-stone-600">•</span>
                 <button
@@ -131,7 +144,7 @@ export const TodayConversationsList: React.FC<TodayConversationsListProps> = ({
                   onClick={() => setModalMode('archive')}
                   className="text-xs text-stone-400 hover:text-amber-300 underline underline-offset-2 cursor-pointer"
                 >
-                  View archive
+                  View archive ({archivedConversations.length})
                 </button>
               </>
             )}

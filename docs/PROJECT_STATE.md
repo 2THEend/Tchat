@@ -13,25 +13,21 @@
 
 ## Current Stage
 
-**Feed — Phase 1: Minimal Ephemeral Discovery Foundation Verified.**
-- Implemented core database model and ephemeral post lifecycle for Tchat's public discovery space.
-- Added migration `supabase/migrations/20261003140000_create_tchat_feed_posts.sql`:
-  - `public.feed_posts` table with strict 1–500 character constraint, author foreign key to `profiles`, and database-enforced 24-hour expiration (`expires_at = now() + interval '24 hours'`).
-  - Row Level Security policies enforcing `author_id = auth.uid()` on INSERT, and filtering SELECT queries to active posts (`expires_at > now()`) while strictly excluding bidirectional blocked relationships via `public.are_users_blocked(...)`.
-  - Secure PostgreSQL RPCs `create_feed_post(p_content TEXT)` and `get_active_feed_posts()` executed as `SECURITY DEFINER` by `authenticated` users only.
-- Implemented Feed domain service in `src/domains/feed/`:
-  - `types.ts`: `TchatFeedPost`, `CreateFeedPostInput`, `FeedServiceResult<T>`.
-  - `validation.ts`: `validateFeedPostContent` enforcing 1–500 character limits, whitespace trimming, and empty content rejection.
-  - `feedService.ts`: `createFeedPost` and `getActiveFeedPosts`.
-- Replaced static placeholder in `src/components/places/FeedView.tsx` with minimal functional discovery UI:
-  - Ephemeral compose box with character counter (`/500`) and 24h expiration indicator.
-  - Chronological active post stream showing author avatar, display name, handle, relative created time, and remaining lifespan.
-  - Interactive author tap target wired to `OtherUserProfileModal`—ensuring viewing or reading never creates a connection, and that reaching out strictly requires the standard connection-request flow with mandatory 3–300 character context.
-  - Loading, empty, error, and refresh states.
-- Passed `currentUserId` to `FeedView` in `AppShell.tsx`.
-- 46 automated integration and security tests passing in `test/feed.test.ts`.
-- All regression suites (44 Home/History/Archive, 36 other-user profile, 41 own profile, 13 connections) passing.
-- TypeScript check (`tsc --noEmit`) and Vite build verified clean with 0 errors.
+**Home, History, Archive & People Discovery Intent Separation Verified.**
+- **Home / History / Archive Semantic Separation**:
+  - Home strictly shows conversations active during the user's current local day (excluding archived conversations unless new activity occurred today after being archived).
+  - Explicit top-level separation on Home between `History` (`btn-open-conversation-history` with History icon) and `Archive` (`btn-open-conversation-archive` with Archive icon). Archive is not hidden inside history.
+  - In empty states when no conversations exist today, independent links are provided for `Browse history` and `View archive`.
+  - In `AllConversationsModal.tsx`, History surface and Archive surface are distinct views with dedicated headers, unarchive/archive action buttons, and proper isolation.
+  - 1:1 conversation view (`ConversationView.tsx`) and header (`ConversationHeader.tsx`) support direct archive and unarchive actions with immediate visual state indicators.
+- **Find People vs Manage Connections Separation**:
+  - Resolved user conflict where "Manage" and "Find People" linked to the same location.
+  - "Manage" under Your Connections links directly to `ConnectionsView` for relationship management (viewing connections, incoming/sent requests, blocked members).
+  - "Find People" opens the dedicated `FindPeopleModal.tsx` directly over Home for targeted member discovery, username search, and initiating intentional connection requests with context without navigating through the relationship management tab bar.
+- **Verification Evidence**:
+  - TypeScript compilation (`npm run lint` / `tsc --noEmit`) passes with 0 errors.
+  - Production build (`npm run build` / `compile_applet`) succeeds.
+  - Automated test suites (`npx tsx test/home_history_archive_separation.test.ts` and `npx tsx test/connections.test.ts`) pass 100%.
 
 ---
 

@@ -10,6 +10,7 @@ import { HomeAuthenticatedView } from '../home/HomeAuthenticatedView';
 import { ProfileView } from '../profile/ProfileView';
 import { FeedView } from '../places/FeedView';
 import { ConnectionsView } from '../connections/ConnectionsView';
+import { FindPeopleModal } from '../connections/FindPeopleModal';
 import { checkIdentity } from '../../domains/identity/identityService';
 import { signOut } from '../../domains/auth/authService';
 import { TchatProfile, TchatAccount } from '../../domains/identity/types';
@@ -63,6 +64,7 @@ export function AppShell() {
   const [isLoadingActiveGroups, setIsLoadingActiveGroups] = useState<boolean>(false);
   const [incomingCount, setIncomingCount] = useState<number>(0);
   const [connectionsCount, setConnectionsCount] = useState<number>(0);
+  const [isFindingPeople, setIsFindingPeople] = useState<boolean>(false);
 
   const handleOpenConnections = useCallback((tab: ConnectionsActiveTab = 'connections') => {
     setConnectionsActiveTab(tab);
@@ -787,7 +789,7 @@ export function AppShell() {
               onSignOut={handleSignOut}
               isSigningOut={isSigningOut}
               onOpenConnections={handleOpenConnections}
-              onFindPeople={() => handleOpenConnections('find')}
+              onFindPeople={() => setIsFindingPeople(true)}
               onCreateGroup={() => {
                 setIsViewingConnections(false);
                 setActiveConversation(null);
@@ -850,6 +852,24 @@ export function AppShell() {
             setSelectedGroupId(groupId);
           }}
         />
+
+        {/* Find People Discovery Modal */}
+        {isFindingPeople && user && (
+          <FindPeopleModal
+            isOpen={isFindingPeople}
+            onClose={() => {
+              setIsFindingPeople(false);
+              // Refresh counts in case new connection requests were sent/handled
+              getIncomingRequests(user.id).then((res) => {
+                if (res.data) setIncomingCount(res.data.length);
+              });
+              getConnections(user.id).then((res) => {
+                if (res.data) setConnectionsCount(res.data.length);
+              });
+            }}
+            currentUserId={user.id}
+          />
+        )}
 
         {/* Permanent Places Navigation (hidden when inside active conversation or group flow) */}
         {!activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && (
