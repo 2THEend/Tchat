@@ -813,7 +813,7 @@ export function AppShell() {
           ) : null}
 
           {!activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && currentPlace === 'feed' && (
-            <FeedView />
+            <FeedView currentUserId={user.id} />
           )}
 
           {!activeConversation && !isCreatingGroup && !viewingGroup && !selectedGroupId && !activeGroupSpace && currentPlace === 'profile' && isViewingConnections ? (

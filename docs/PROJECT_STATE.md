@@ -13,20 +13,24 @@
 
 ## Current Stage
 
-**Home / History / Archive — Semantic Separation Resolved & Verified.**
-- Addressed product-model mismatch where Home, History, and Archive previously conflated distinct concepts.
-- **Home Semantics**: Strict 1:1 qualifying interaction during user's current local calendar day (`shouldConversationAppearOnHome`). Inactivity naturally moves conversations off Home without archiving them. Connecting with someone does not create Home activity.
-- **History Semantics**: Persistent WhatsApp-style conversation list containing all normal 1:1 conversations accessible to the user (today, yesterday, older, and inactive). Excludes explicitly archived conversations and group/circle spaces.
-- **Archive Semantics & Data Model**: Explicit per-user organizational state via `public.conversation_archives` table (`user_id`, `conversation_id`, `archived_at`). RLS policies restrict SELECT, INSERT, and DELETE strictly to the authenticated participant (`user_id = auth.uid()`). Archiving does not delete messages, connections, or streaks, and does not alter the other participant's history or archive state.
-- **New Activity on Archived Chat**: If meaningful activity occurs today after a conversation was archived (`last_activity_at > archived_at`), it surfaces on Home to represent today's social reality, while retaining its explicit archive state in History until unarchived.
-- **Operations & UI**:
-  - PostgreSQL RPCs `archive_conversation(p_conversation_id)` and `unarchive_conversation(p_conversation_id)` with `SECURITY DEFINER` and caller validation.
-  - Client operations `archiveConversation`, `unarchiveConversation`, and `getArchivedConversations`.
-  - Exposed distinct `History ({count})` and `Archive ({count})` destinations directly in the Home header, with empty-state secondary action routing directly to "View archive".
-  - Cleanly decoupled the History modal and Archive modal so Archive is not hidden as a nested row inside History.
-  - Added archive/unarchive actions and status banner to `ConversationHeader` and `ConversationView`.
-- 44 automated tests passing in `test/home_history_archive_separation.test.ts`.
-- 41 profile tests, 36 other-user profile tests, 20 lifecycle tests, 13 connections tests all verified passing.
+**Feed — Phase 1: Minimal Ephemeral Discovery Foundation Verified.**
+- Implemented core database model and ephemeral post lifecycle for Tchat's public discovery space.
+- Added migration `supabase/migrations/20261003140000_create_tchat_feed_posts.sql`:
+  - `public.feed_posts` table with strict 1–500 character constraint, author foreign key to `profiles`, and database-enforced 24-hour expiration (`expires_at = now() + interval '24 hours'`).
+  - Row Level Security policies enforcing `author_id = auth.uid()` on INSERT, and filtering SELECT queries to active posts (`expires_at > now()`) while strictly excluding bidirectional blocked relationships via `public.are_users_blocked(...)`.
+  - Secure PostgreSQL RPCs `create_feed_post(p_content TEXT)` and `get_active_feed_posts()` executed as `SECURITY DEFINER` by `authenticated` users only.
+- Implemented Feed domain service in `src/domains/feed/`:
+  - `types.ts`: `TchatFeedPost`, `CreateFeedPostInput`, `FeedServiceResult<T>`.
+  - `validation.ts`: `validateFeedPostContent` enforcing 1–500 character limits, whitespace trimming, and empty content rejection.
+  - `feedService.ts`: `createFeedPost` and `getActiveFeedPosts`.
+- Replaced static placeholder in `src/components/places/FeedView.tsx` with minimal functional discovery UI:
+  - Ephemeral compose box with character counter (`/500`) and 24h expiration indicator.
+  - Chronological active post stream showing author avatar, display name, handle, relative created time, and remaining lifespan.
+  - Interactive author tap target wired to `OtherUserProfileModal`—ensuring viewing or reading never creates a connection, and that reaching out strictly requires the standard connection-request flow with mandatory 3–300 character context.
+  - Loading, empty, error, and refresh states.
+- Passed `currentUserId` to `FeedView` in `AppShell.tsx`.
+- 46 automated integration and security tests passing in `test/feed.test.ts`.
+- All regression suites (44 Home/History/Archive, 36 other-user profile, 41 own profile, 13 connections) passing.
 - TypeScript check (`tsc --noEmit`) and Vite build verified clean with 0 errors.
 
 ---
