@@ -6,6 +6,8 @@
 import { supabase } from '../../lib/supabase';
 import { 
   TchatCall, 
+  TchatIncomingCall,
+  TchatCallerProfile,
   CallServiceResult, 
   CreateCallRequestInput, 
   DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS,
@@ -14,7 +16,11 @@ import {
   RecordCallFailureResult,
   EndCallResult
 } from './types';
-import { validateCallReason, validateCallMode } from './validation';
+import { 
+  validateCallReason, 
+  validateCallMode, 
+  isPendingIncomingCallForUser 
+} from './validation';
 import { emitCallEvent } from './events';
 
 function isPendingSchemaError(err: { code?: string; message?: string } | null | undefined): boolean {
@@ -347,4 +353,81 @@ export async function endCallSession(
     return { data: null, error: message };
   }
 }
+
+/**
+ * Resolves the current authoritative pending incoming call for the authenticated user,
+ * enriched with the caller's profile.
+ * Executes server-side lazy expiration checks via get_active_call_for_conversation
+ * so expired pending calls are never returned as active prompts.
+ */
+export async function getPendingIncomingCallForUser(
+  userId: string
+): Promise<CallServiceResult<TchatIncomingCall | null>> {
+  if (!supabase) {
+    return { data: null, error: 'Supabase client is not initialized.' };
+  }
+
+  if (!userId) {
+    return { data: null, error: 'Invalid user identifier.' };
+  }
+
+  try {
+    const { data: pendingRows, error: queryError } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('recipient_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (queryError) {
+      if (isPendingSchemaError(queryError)) {
+        return { data: null, error: null, isSchemaPending: true };
+      }
+      return { data: null, error: queryError.message };
+    }
+
+    if (!pendingRows || pendingRows.length === 0) {
+      return { data: null };
+    }
+
+    for (const row of pendingRows as TchatCall[]) {
+      // Authoritatively evaluate via get_active_call_for_conversation, which
+      // transitions expired pending calls to 'expired' in PostgreSQL.
+      const activeRes = await getActiveCallForConversation(row.conversation_id);
+      const authoritativeCall = activeRes.data;
+
+      if (authoritativeCall && isPendingIncomingCallForUser(authoritativeCall, userId)) {
+        let callerProfile: TchatCallerProfile | null = null;
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .eq('id', authoritativeCall.initiator_id)
+          .maybeSingle();
+
+        if (profileRow) {
+          callerProfile = {
+            id: profileRow.id,
+            username: profileRow.username,
+            display_name: profileRow.display_name,
+            avatar_url: profileRow.avatar_url,
+          };
+        }
+
+        return {
+          data: {
+            ...authoritativeCall,
+            caller_profile: callerProfile,
+          },
+        };
+      }
+    }
+
+    return { data: null };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to fetch pending incoming call.';
+    return { data: null, error: message };
+  }
+}
+
 

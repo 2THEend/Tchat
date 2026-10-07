@@ -13,21 +13,22 @@
 
 ## Current Stage
 
-**Home, History, Archive & People Discovery Intent Separation Verified.**
-- **Home / History / Archive Semantic Separation**:
-  - Home strictly shows conversations active during the user's current local day (excluding archived conversations unless new activity occurred today after being archived).
-  - Explicit top-level separation on Home between `History` (`btn-open-conversation-history` with History icon) and `Archive` (`btn-open-conversation-archive` with Archive icon). Archive is not hidden inside history.
-  - In empty states when no conversations exist today, independent links are provided for `Browse history` and `View archive`.
-  - In `AllConversationsModal.tsx`, History surface and Archive surface are distinct views with dedicated headers, unarchive/archive action buttons, and proper isolation.
-  - 1:1 conversation view (`ConversationView.tsx`) and header (`ConversationHeader.tsx`) support direct archive and unarchive actions with immediate visual state indicators.
-- **Find People vs Manage Connections Separation**:
-  - Resolved user conflict where "Manage" and "Find People" linked to the same location.
-  - "Manage" under Your Connections links directly to `ConnectionsView` for relationship management (viewing connections, incoming/sent requests, blocked members).
-  - "Find People" opens the dedicated `FindPeopleModal.tsx` directly over Home for targeted member discovery, username search, and initiating intentional connection requests with context without navigating through the relationship management tab bar.
+**Global Incoming Calls + Presence Truthfulness Implemented & Verified (Automated).**
+- **Global Incoming Call Detection (`AppShell` + Calls Domain)**:
+  - Added `TchatCallerProfile` and `TchatIncomingCall` types in `src/domains/calls/types.ts`.
+  - Added `isPendingIncomingCallForUser`, `getCallEventDedupeKey`, and `resolveGlobalIncomingCallState` in `src/domains/calls/validation.ts` for strict recipient isolation, expiration validation, and duplicate realtime event suppression.
+  - Added `getPendingIncomingCallForUser(userId)` in `src/domains/calls/callsService.ts` to query pending incoming calls for the authenticated recipient, execute authoritative server-side lazy expiration checks via `get_active_call_for_conversation`, and enrich with caller profile metadata.
+  - Added `subscribeToUserIncomingCalls(userId, handlers)` in `src/domains/calls/realtime.ts` listening to `public.calls` (`recipient_id=eq.${userId}`) with duplicate-subscription prevention, event deduplication, reconnect state resynchronization, and idempotent cleanup on logout/account switch/unmount.
+  - Created `src/components/conversations/calls/GlobalIncomingCallBanner.tsx` and mounted it in `src/components/shell/AppShell.tsx` so incoming calls appear regardless of which Tchat screen (Home, Feed, Profile, Connections, Groups) is open.
+  - **Accept** uses `respondToCall(call.id, 'accept')` and hands off directly into `ConversationView` + `ActiveCallSession` (`WebRTCCallManager`) without duplicating WebRTC logic.
+  - **Decline** uses `respondToCall(call.id, 'decline')` and immediately dismisses the global prompt.
+- **Presence Truthfulness**:
+  - Removed the deceptive static green presence indicator (`bg-emerald-400`) from `src/components/shell/AppShell.tsx` (`#app-status-header`).
+  - Removed the deceptive static pulsing green indicator (`bg-emerald-400 animate-pulse`) from `src/components/foundation/FoundationView.tsx`.
 - **Verification Evidence**:
-  - TypeScript compilation (`npm run lint` / `tsc --noEmit`) passes with 0 errors.
-  - Production build (`npm run build` / `compile_applet`) succeeds.
-  - Automated test suites (`npx tsx test/home_history_archive_separation.test.ts` and `npx tsx test/connections.test.ts`) pass 100%.
+  - 28 automated tests in `test/global_incoming_calls_and_presence.test.ts` passing, plus existing call regression suites (`test/calls.test.ts` and `test/calls_webrtc.test.ts`) passing.
+  - TypeScript check (`tsc --noEmit`) and production build (`vite build`) verified clean with 0 errors.
+  - Manual cross-screen Android device testing (Tests A–H) ready for Tonbi's verification.
 
 ---
 

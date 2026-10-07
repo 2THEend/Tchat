@@ -6,7 +6,8 @@ import {
   CallPresetReason, 
   CALL_PRESET_LABELS, 
   DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS, 
-  TchatCall 
+  TchatCall,
+  TchatIncomingCall
 } from './types';
 
 export interface CallReasonValidationResult {
@@ -123,3 +124,65 @@ export function calculateCallExpirationDate(_requestedSeconds?: number): string 
   // Any client-requested duration is ignored.
   return new Date(Date.now() + DEFAULT_IMMEDIATE_CALL_EXPIRATION_SECONDS * 1000).toISOString();
 }
+
+/**
+ * Checks whether a call record represents an active, non-expired pending incoming call
+ * specifically addressed to the given authenticated user.
+ */
+export function isPendingIncomingCallForUser(
+  call: TchatCall | null | undefined,
+  currentUserId: string,
+  nowMs: number = Date.now()
+): boolean {
+  if (!call || !currentUserId) return false;
+  if (call.recipient_id !== currentUserId) return false;
+  if (call.initiator_id === currentUserId) return false;
+  if (call.status !== 'pending') return false;
+  if (call.request_expires_at) {
+    const expiresMs = new Date(call.request_expires_at).getTime();
+    if (Number.isNaN(expiresMs) || expiresMs <= nowMs) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Produces a deterministic deduplication key for a call state event so duplicate
+ * realtime broadcasts for the same call transition are safely ignored.
+ */
+export function getCallEventDedupeKey(
+  call: Pick<TchatCall, 'id' | 'status'> & { updated_at?: string | null }
+): string {
+  return `${call.id}:${call.status}:${call.updated_at || ''}`;
+}
+
+/**
+ * Resolves the authoritative global incoming call state for the authenticated user.
+ * - Filters out calls belonging to other users or initiated by the current user.
+ * - Immediately clears prompts when a call is accepted, declined, cancelled, expired, or ended.
+ * - Preserves existing reference if a duplicate event arrives for the exact same call state.
+ */
+export function resolveGlobalIncomingCallState(
+  currentIncomingCall: TchatIncomingCall | null,
+  candidateCall: TchatIncomingCall | null,
+  currentUserId: string,
+  nowMs: number = Date.now()
+): TchatIncomingCall | null {
+  if (!isPendingIncomingCallForUser(candidateCall, currentUserId, nowMs) || !candidateCall) {
+    return null;
+  }
+
+  if (
+    currentIncomingCall &&
+    currentIncomingCall.id === candidateCall.id &&
+    currentIncomingCall.status === candidateCall.status &&
+    currentIncomingCall.updated_at === candidateCall.updated_at &&
+    Boolean(currentIncomingCall.caller_profile) === Boolean(candidateCall.caller_profile)
+  ) {
+    return currentIncomingCall;
+  }
+
+  return candidateCall;
+}
+

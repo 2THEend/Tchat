@@ -46,6 +46,12 @@ import { DiscoverGroupsModal } from '../groups/DiscoverGroupsModal';
 import { GroupDetails, UserActiveGroupItem } from '../../domains/groups/types';
 import { getUserActiveGroups, getGroupDetails } from '../../domains/groups/groupsService';
 import { onGroupEvent } from '../../domains/groups/events';
+import { TchatCall, TchatIncomingCall, TchatCallerProfile } from '../../domains/calls/types';
+import { getPendingIncomingCallForUser } from '../../domains/calls/callsService';
+import { subscribeToUserIncomingCalls } from '../../domains/calls/realtime';
+import { onCallEvent } from '../../domains/calls/events';
+import { resolveGlobalIncomingCallState } from '../../domains/calls/validation';
+import { GlobalIncomingCallBanner } from '../conversations/calls/GlobalIncomingCallBanner';
 
 export function AppShell() {
   // Cached snapshot for instant authenticated resume without blocking screens
@@ -75,6 +81,10 @@ export function AppShell() {
   const [conversations, setConversations] = useState<TchatConversation[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState<boolean>(false);
   const [activeConversation, setActiveConversation] = useState<TchatConversation | null>(null);
+
+  // Global Incoming Call State
+  const [incomingCall, setIncomingCall] = useState<TchatIncomingCall | null>(null);
+  const incomingCallReqSeqRef = useRef<number>(0);
 
   // Auth State
   // If we already have a cached profile and account, we do not need to show the full-screen "Checking session..." loader
@@ -211,6 +221,125 @@ export function AppShell() {
     setActiveConversation(null);
     clearStoredActiveConversationId();
   }, []);
+
+  // Resolve authoritative pending incoming call for the authenticated user
+  const refreshPendingIncomingCall = useCallback(async (userId: string) => {
+    const reqSeq = ++incomingCallReqSeqRef.current;
+    try {
+      const res = await getPendingIncomingCallForUser(userId);
+      if (reqSeq !== incomingCallReqSeqRef.current) return;
+      setIncomingCall((prev) =>
+        resolveGlobalIncomingCallState(prev, res.data || null, userId)
+      );
+    } catch {
+      // Gracefully ignore transient errors
+    }
+  }, []);
+
+  // Global Incoming Call Realtime Listener (mounted for authenticated user across all screens)
+  useEffect(() => {
+    if (!user?.id || !profile) {
+      setIncomingCall(null);
+      return;
+    }
+
+    const currentUserId = user.id;
+    refreshPendingIncomingCall(currentUserId);
+
+    const unsubscribeRealtime = subscribeToUserIncomingCalls(currentUserId, {
+      onIncomingCallChange: (call) => {
+        if (call.recipient_id !== currentUserId) return;
+        if (call.status !== 'pending') {
+          setIncomingCall((prev) => (prev?.id === call.id ? null : prev));
+        }
+        refreshPendingIncomingCall(currentUserId);
+      },
+      onReconnected: () => {
+        refreshPendingIncomingCall(currentUserId);
+      },
+    });
+
+    const unsubscribeCallEvents = onCallEvent((event) => {
+      const call = event.call;
+      if (!call || call.recipient_id !== currentUserId) return;
+      if (call.status !== 'pending') {
+        setIncomingCall((prev) => (prev?.id === call.id ? null : prev));
+      }
+      refreshPendingIncomingCall(currentUserId);
+    });
+
+    return () => {
+      unsubscribeRealtime();
+      unsubscribeCallEvents();
+    };
+  }, [user?.id, profile, refreshPendingIncomingCall]);
+
+  // Handoff accepted global incoming call into the existing ConversationView + ActiveCallSession flow
+  const handleAcceptGlobalCall = useCallback(
+    async (acceptedCall: TchatCall, callerProfile?: TchatCallerProfile | null) => {
+      if (!user) return;
+      setIncomingCall(null);
+      setIsViewingConnections(false);
+      setIsCreatingGroup(false);
+      setViewingGroup(null);
+      setSelectedGroupId(null);
+      setActiveGroupSpace(null);
+      setIsDiscoveringGroups(false);
+      setIsFindingPeople(false);
+
+      const existingConv = conversations.find((c) => c.id === acceptedCall.conversation_id);
+      if (existingConv && existingConv.other_participant) {
+        handleOpenConversation(existingConv);
+        return;
+      }
+
+      const convRes = await getConversationById(acceptedCall.conversation_id, user.id);
+      if (convRes.data) {
+        const conv = convRes.data;
+        if (!conv.other_participant && callerProfile) {
+          conv.other_participant = {
+            id: callerProfile.id,
+            username: callerProfile.username,
+            display_name: callerProfile.display_name,
+            avatar_url: callerProfile.avatar_url,
+          };
+        }
+        if (conv.other_participant) {
+          handleOpenConversation(conv);
+          return;
+        }
+      }
+
+      if (callerProfile) {
+        const fallbackConv: TchatConversation = {
+          id: acceptedCall.conversation_id,
+          connection_id: '',
+          user_a_id:
+            acceptedCall.initiator_id < acceptedCall.recipient_id
+              ? acceptedCall.initiator_id
+              : acceptedCall.recipient_id,
+          user_b_id:
+            acceptedCall.initiator_id < acceptedCall.recipient_id
+              ? acceptedCall.recipient_id
+              : acceptedCall.initiator_id,
+          last_activity_at: acceptedCall.updated_at,
+          last_activity_type: 'call',
+          last_message_preview: null,
+          last_sender_id: acceptedCall.initiator_id,
+          created_at: acceptedCall.created_at,
+          updated_at: acceptedCall.updated_at,
+          other_participant: {
+            id: callerProfile.id,
+            username: callerProfile.username,
+            display_name: callerProfile.display_name,
+            avatar_url: callerProfile.avatar_url,
+          },
+        };
+        handleOpenConversation(fallbackConv);
+      }
+    },
+    [user, conversations, handleOpenConversation]
+  );
 
   const handleOpenConversationFromConnection = async (targetUserId: string, partnerProfile?: any) => {
     try {
@@ -375,6 +504,7 @@ export function AppShell() {
           setProfile(null);
           setAccount(null);
           setActiveConversation(null);
+          setIncomingCall(null);
           setIsPasswordRecovery(false);
           setCurrentPlace('home');
         }
@@ -399,6 +529,7 @@ export function AppShell() {
       setProfile(null);
       setAccount(null);
       setActiveConversation(null);
+      setIncomingCall(null);
       setIsPasswordRecovery(false);
       setCurrentPlace('home');
     } finally {
@@ -693,10 +824,22 @@ export function AppShell() {
             <span className="tracking-tight text-stone-300 font-semibold">Tchat</span>
             <div className="flex items-center gap-2">
               <PWAInstallButton variant="compact" />
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               <span className="text-[11px] font-mono text-stone-300">@{profile.username}</span>
             </div>
           </header>
+        )}
+
+        {/* Global Incoming Call Prompt (shown on any screen when not already viewing that conversation's inline banner) */}
+        {incomingCall && (!activeConversation || activeConversation.id !== incomingCall.conversation_id) && (
+          <GlobalIncomingCallBanner
+            call={incomingCall}
+            currentUserId={user.id}
+            onAccept={handleAcceptGlobalCall}
+            onDismiss={() => {
+              setIncomingCall(null);
+              refreshPendingIncomingCall(user.id);
+            }}
+          />
         )}
 
         {/* Place Content */}

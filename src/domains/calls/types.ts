@@ -133,6 +133,17 @@ export interface RespondToCallInput {
   response: 'accept' | 'decline';
 }
 
+export interface TchatCallerProfile {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+export interface TchatIncomingCall extends TchatCall {
+  caller_profile?: TchatCallerProfile | null;
+}
+
 export interface CallServiceResult<T> {
   data: T | null;
   error?: string | null;

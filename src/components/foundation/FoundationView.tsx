@@ -51,7 +51,6 @@ export function FoundationView({ currentPlace }: FoundationViewProps) {
             System Initialization
           </span>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/60 border border-emerald-800/40 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Foundation Ready
           </span>
         </div>
