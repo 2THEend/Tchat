@@ -89,6 +89,7 @@ export function AppShell() {
   // Auth State
   // If we already have a cached profile and account, we do not need to show the full-screen "Checking session..." loader
   const [isInitializing, setIsInitializing] = useState<boolean>(() => !cachedIdentity?.profile);
+  const [isSessionResolved, setIsSessionResolved] = useState<boolean>(false);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(() => {
     if (cachedIdentity?.userId) {
@@ -97,6 +98,12 @@ export function AppShell() {
     return null;
   });
   const [isSigningOut, setIsSigningOut] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __TCHAT_MOUNTED__?: boolean }).__TCHAT_MOUNTED__ = true;
+    }
+  }, []);
 
   // Recovery & URL Error State
   const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(false);
@@ -432,7 +439,10 @@ export function AppShell() {
 
     async function initSession() {
       if (!supabase) {
-        if (isMounted) setIsInitializing(false);
+        if (isMounted) {
+          setIsSessionResolved(true);
+          setIsInitializing(false);
+        }
         return;
       }
 
@@ -452,11 +462,21 @@ export function AppShell() {
         clearAuthUrlParams();
       }
 
+      // Safety fallback so slow/stalled mobile connections never block the app indefinitely
+      const initTimeout = setTimeout(() => {
+        if (isMounted) {
+          setIsSessionResolved(true);
+          setIsInitializing(false);
+          setIsCheckingIdentity(false);
+        }
+      }, 5000);
+
       try {
         const { data } = await supabase.auth.getSession();
         if (isMounted) {
           setSession(data.session);
           setUser(data.session?.user || null);
+          setIsSessionResolved(true);
 
           if (data.session?.user) {
             // Verify in background if we already had a cached profile, otherwise blocking
@@ -471,7 +491,11 @@ export function AppShell() {
         }
       } catch (err) {
         console.error('Failed to get initial session:', err);
+        if (isMounted) {
+          setIsSessionResolved(true);
+        }
       } finally {
+        clearTimeout(initTimeout);
         if (isMounted) {
           setIsInitializing(false);
         }
@@ -590,7 +614,7 @@ export function AppShell() {
   }
 
   // 3. Unauthenticated state -> Auth Entry (Protected access to all screens)
-  if (!session || !user) {
+  if ((!session && isSessionResolved) || !user) {
     return (
       <div 
         id="app-viewport-root"
