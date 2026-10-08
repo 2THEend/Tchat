@@ -554,7 +554,7 @@ export function AppShell() {
         className="w-full h-full min-h-screen bg-stone-950 flex items-center justify-center p-4 selection:bg-stone-800"
       >
         <div className="flex flex-col items-center gap-3 text-center animate-pulse">
-          <div className="w-12 h-12 rounded-2xl bg-stone-900 border border-stone-800/80 flex items-center justify-center text-stone-200 font-bold text-lg tracking-tight shadow-xl shadow-black">
+          <div className="w-11 h-11 rounded-[14px] bg-stone-900 border border-stone-800/90 flex items-center justify-center text-stone-100 font-display text-2xl leading-none shadow-xl shadow-black">
             T
           </div>
         </div>
@@ -571,16 +571,8 @@ export function AppShell() {
       >
         <main
           id="app-shell-container"
-          className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
+          className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden safe-top safe-bottom"
         >
-          <header 
-            id="app-status-header"
-            className="w-full pt-3 px-6 pb-2 flex items-center justify-between text-stone-400 text-[11px] font-medium select-none z-10 border-b border-stone-900/50"
-          >
-            <span className="tracking-tight text-stone-300 font-semibold">Tchat</span>
-            <span className="text-[10px] text-amber-400 font-mono">recovery</span>
-          </header>
-
           <section id="app-main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
             <AuthEntry 
               initialView="reset_password"
@@ -606,19 +598,8 @@ export function AppShell() {
       >
         <main
           id="app-shell-container"
-          className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
+          className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden safe-top safe-bottom"
         >
-          <header 
-            id="app-status-header"
-            className="w-full pt-3 px-6 pb-2 flex items-center justify-between text-stone-400 text-[11px] font-medium select-none z-10 border-b border-stone-900/50"
-          >
-            <span className="tracking-tight text-stone-300 font-semibold">Tchat</span>
-            <div className="flex items-center gap-2">
-              <PWAInstallButton variant="compact" />
-              <span className="text-[10px] text-stone-500 font-mono">auth</span>
-            </div>
-          </header>
-
           <section id="app-main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
             <AuthEntry 
               initialError={authInitialError}
@@ -641,7 +622,7 @@ export function AppShell() {
         className="w-full h-full min-h-screen bg-stone-950 flex items-center justify-center sm:p-4"
       >
         <main className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col items-center justify-center sm:rounded-[40px] sm:border sm:border-stone-800/70 p-6 text-center animate-pulse">
-          <div className="w-12 h-12 rounded-2xl bg-stone-900 border border-stone-800/80 flex items-center justify-center text-stone-200 font-bold text-lg tracking-tight shadow-xl shadow-black mb-3">
+          <div className="w-11 h-11 rounded-[14px] bg-stone-900 border border-stone-800/90 flex items-center justify-center text-stone-100 font-display text-2xl leading-none shadow-xl shadow-black">
             T
           </div>
         </main>

@@ -3,6 +3,7 @@
 @layer base {
   :root {
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-display: 'Instrument Serif', Georgia, Cambria, 'Times New Roman', Times, serif;
     --sat: env(safe-area-inset-top, 0px);
     --sab: env(safe-area-inset-bottom, 0px);
     --sal: env(safe-area-inset-left, 0px);
@@ -16,6 +17,10 @@
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
+}
+
+.font-display {
+  font-family: var(--font-display);
 }
 
 /* Safe area padding utilities for mobile-first views */
