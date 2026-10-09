@@ -19,7 +19,7 @@ import {
   saveCachedIdentity, 
   clearCachedIdentity 
 } from '../../domains/identity/identityCache';
-import { parseAuthUrlParams, formatAuthUrlError, clearAuthUrlParams } from '../../domains/auth/urlHandler';
+import { parseAuthUrlParams, formatAuthUrlError, clearAuthUrlParams, hasAuthUrlParams } from '../../domains/auth/urlHandler';
 import { getIncomingRequests, getConnections } from '../../domains/connections/connectionsService';
 import { onConnectionEvent } from '../../domains/connections/events';
 import { ConnectionsActiveTab } from '../../domains/connections/types';
@@ -457,11 +457,6 @@ export function AppShell() {
         setAuthInitialError(formattedUrlError);
       }
 
-      // Clean address bar if auth-related params exist
-      if (urlParams.type || urlParams.error || urlParams.errorCode || urlParams.errorDescription) {
-        clearAuthUrlParams();
-      }
-
       // Safety fallback so slow/stalled mobile connections never block the app indefinitely
       const initTimeout = setTimeout(() => {
         if (isMounted) {
@@ -473,15 +468,42 @@ export function AppShell() {
 
       try {
         const { data } = await supabase.auth.getSession();
+        let resolvedSession = data.session;
+
+        // Fallback: if URL contains explicit verification/OAuth tokens that getSession() did not yet consume
+        if (!resolvedSession && !formattedUrlError) {
+          if (urlParams.accessToken && urlParams.refreshToken) {
+            const setRes = await supabase.auth.setSession({
+              access_token: urlParams.accessToken,
+              refresh_token: urlParams.refreshToken,
+            });
+            resolvedSession = setRes.data.session;
+          } else if (urlParams.code) {
+            const codeRes = await supabase.auth.exchangeCodeForSession(urlParams.code);
+            resolvedSession = codeRes.data.session;
+          } else if (urlParams.tokenHash && urlParams.type) {
+            const otpRes = await supabase.auth.verifyOtp({
+              token_hash: urlParams.tokenHash,
+              type: urlParams.type as 'signup' | 'recovery' | 'invite' | 'magiclink' | 'email_change' | 'email',
+            });
+            resolvedSession = otpRes.data.session;
+          }
+        }
+
+        // Clean address bar ONLY after Supabase Auth has finished reading/consuming URL tokens
+        if (hasAuthUrlParams(urlParams)) {
+          clearAuthUrlParams();
+        }
+
         if (isMounted) {
-          setSession(data.session);
-          setUser(data.session?.user || null);
+          setSession(resolvedSession);
+          setUser(resolvedSession?.user || null);
           setIsSessionResolved(true);
 
-          if (data.session?.user) {
+          if (resolvedSession?.user) {
             // Verify in background if we already had a cached profile, otherwise blocking
             const hasCachedProfile = Boolean(profileRef.current);
-            await verifyUserIdentity(data.session.user.id, hasCachedProfile);
+            await verifyUserIdentity(resolvedSession.user.id, hasCachedProfile);
           } else {
             // No active session: clear any cached identity
             clearCachedIdentity();
@@ -491,6 +513,9 @@ export function AppShell() {
         }
       } catch (err) {
         console.error('Failed to get initial session:', err);
+        if (hasAuthUrlParams(urlParams)) {
+          clearAuthUrlParams();
+        }
         if (isMounted) {
           setIsSessionResolved(true);
         }

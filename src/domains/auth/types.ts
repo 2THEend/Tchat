@@ -26,4 +26,7 @@ export interface AuthUrlParams {
   errorCode?: string | null;
   errorDescription?: string | null;
   accessToken?: string | null;
+  refreshToken?: string | null;
+  code?: string | null;
+  tokenHash?: string | null;
 }

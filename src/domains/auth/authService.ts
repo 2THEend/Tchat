@@ -13,9 +13,11 @@
  */
 
 import { supabase } from '../../lib/supabase';
+import { env } from '../../config/env';
 import { AuthResponse } from './types';
 import { normalizeUsername, validateUsername } from '../identity/validation';
 import { validateEmail, validatePassword } from './validation';
+import { getAuthRedirectUrl } from './urlHandler';
 
 function formatAuthError(error: { message: string; status?: number }): { error: string; isRateLimited: boolean } {
   const msg = error.message.toLowerCase();
@@ -56,6 +58,13 @@ function formatAuthError(error: { message: string; status?: number }): { error: 
     };
   }
 
+  if (msg.includes('provider is not enabled') || msg.includes('unsupported provider')) {
+    return {
+      error: 'Google sign-in is not yet enabled in Supabase Auth. Please sign in with Email or Username.',
+      isRateLimited: false,
+    };
+  }
+
   return {
     error: error.message || 'An unexpected error occurred. Please try again.',
     isRateLimited: false,
@@ -64,7 +73,8 @@ function formatAuthError(error: { message: string; status?: number }): { error: 
 
 /**
  * Google OAuth sign-in.
- * Supabase handles redirect to Google authentication endpoint.
+ * Verifies provider status against Supabase Auth settings before redirecting,
+ * preventing dead-end JSON 400 pages when Google OAuth credentials are not yet configured.
  */
 export async function signInWithGoogle(): Promise<AuthResponse> {
   if (!supabase) {
@@ -72,10 +82,35 @@ export async function signInWithGoogle(): Promise<AuthResponse> {
   }
 
   try {
+    if (env.supabaseUrl && env.supabasePublishableKey && typeof fetch === 'function') {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      try {
+        const settingsRes = await fetch(`${env.supabaseUrl}/auth/v1/settings`, {
+          headers: { apikey: env.supabasePublishableKey },
+          signal: controller.signal,
+        });
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          if (settings?.external && settings.external.google === false) {
+            return {
+              success: false,
+              error:
+                'Google sign-in is not yet enabled in Supabase Auth. Please use Email or Username, or configure Google OAuth credentials in the Supabase dashboard.',
+            };
+          }
+        }
+      } catch {
+        // Proceed to signInWithOAuth if settings pre-check times out
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: getAuthRedirectUrl(),
       },
     });
 
@@ -151,7 +186,7 @@ export async function signUpWithEmail(
 
   try {
     const options: { emailRedirectTo?: string; data?: Record<string, string> } = {
-      emailRedirectTo: window.location.origin,
+      emailRedirectTo: getAuthRedirectUrl(),
     };
 
     if (requestedUsername && requestedUsername.trim()) {
@@ -200,7 +235,7 @@ export async function resendVerificationEmail(email: string): Promise<AuthRespon
       type: 'signup',
       email: email.trim().toLowerCase(),
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: getAuthRedirectUrl(),
       },
     });
 
@@ -235,7 +270,7 @@ export async function sendPasswordResetEmail(email: string): Promise<AuthRespons
 
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: window.location.origin,
+      redirectTo: getAuthRedirectUrl(),
     });
 
     if (error) {
