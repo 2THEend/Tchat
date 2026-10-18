@@ -589,8 +589,16 @@ export function AppShell() {
   // Called when identity setup completes successfully
   const handleIdentityComplete = (newProfile: TchatProfile) => {
     setProfile(newProfile);
-    if (user && account) {
-      saveCachedIdentity(user.id, newProfile, account, account.email);
+    const activeAccount: TchatAccount = account || {
+      id: newProfile.id,
+      status: 'active',
+      email: user?.email || null,
+      created_at: newProfile.created_at || new Date().toISOString(),
+      updated_at: newProfile.updated_at || new Date().toISOString(),
+    };
+    setAccount(activeAccount);
+    if (user) {
+      saveCachedIdentity(user.id, newProfile, activeAccount, activeAccount.email);
     }
     setCurrentPlace('home');
   };
@@ -803,23 +811,8 @@ export function AppShell() {
       >
         <main
           id="app-shell-container"
-          className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden"
+          className="w-full h-full min-h-screen sm:min-h-0 sm:h-[844px] sm:max-w-md landscape:h-full landscape:max-w-none bg-stone-950 text-stone-100 flex flex-col relative sm:rounded-[40px] sm:border sm:border-stone-800/70 sm:shadow-2xl sm:shadow-black overflow-hidden safe-top safe-bottom"
         >
-          <header 
-            id="app-status-header"
-            className="w-full pt-3 px-6 pb-2 flex items-center justify-between text-stone-400 text-[11px] font-medium select-none z-10 border-b border-stone-900/50"
-          >
-            <span className="tracking-tight text-stone-300 font-semibold">Tchat</span>
-            <button
-              id="btn-signout-setup"
-              type="button"
-              onClick={handleSignOut}
-              className="text-[10px] text-stone-500 hover:text-stone-300 font-mono transition-colors cursor-pointer"
-            >
-              sign out
-            </button>
-          </header>
-
           <section id="app-main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
             <IdentitySetup
               userId={user.id}
@@ -828,6 +821,7 @@ export function AppShell() {
               initialDisplayName={initialDisplayName}
               initialAvatarUrl={initialAvatarUrl}
               onIdentityComplete={handleIdentityComplete}
+              onSignOut={handleSignOut}
             />
           </section>
         </main>

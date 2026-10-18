@@ -136,6 +136,10 @@ export function formatAuthUrlError(params: AuthUrlParams): string | null {
     return 'Google sign-in is not yet enabled in Supabase Auth. Please sign in with Email or Username.';
   }
 
+  if (desc.includes('unable to exchange external code')) {
+    return 'Google sign-in could not complete because the Google OAuth Client Secret in Supabase is invalid. Please update the Client Secret in your Supabase Google provider settings.';
+  }
+
   if (desc.includes('rate limit') || code.includes('rate_limit') || desc.includes('over_email_send_rate_limit')) {
     return 'Email rate limit exceeded. Please wait a few minutes before trying again.';
   }

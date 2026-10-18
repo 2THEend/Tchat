@@ -60,6 +60,16 @@ export function validateDisplayName(name?: string | null): ValidationResult {
   return { isValid: true };
 }
 
+export function validateRequiredDisplayName(name?: string | null): ValidationResult {
+  if (!name || !name.trim()) {
+    return { isValid: false, error: 'Display name is required.' };
+  }
+  if (name.trim().length > 50) {
+    return { isValid: false, error: 'Display name cannot exceed 50 characters.' };
+  }
+  return { isValid: true };
+}
+
 export function validateBio(bio?: string | null): ValidationResult {
   if (!bio || !bio.trim()) return { isValid: true };
   if (bio.trim().length > 200) {

@@ -113,6 +113,14 @@ function runAuthRedirectTests() {
     'Formats disabled Google OAuth provider error cleanly'
   );
 
+  const exchangeCodeErr = formatAuthUrlError(
+    parseAuthUrlParams('?error=server_error&error_description=Unable+to+exchange+external+code%3A+4%2F0A', '')
+  );
+  assert(
+    Boolean(exchangeCodeErr && exchangeCodeErr.includes('Client Secret in Supabase is invalid')),
+    'Formats Google OAuth external code exchange failure cleanly'
+  );
+
   // 4. URL Parameter Cleanup
   console.log('\n--- Address Bar Cleanup (clearAuthUrlParams) ---');
   mockHref = 'https://tchat-bay.vercel.app/?code=pkce-123&type=signup#access_token=abc&refresh_token=def';
